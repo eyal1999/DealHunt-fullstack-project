@@ -63,24 +63,34 @@ const LoginPage = () => {
   };
 
   // Handle form submission
-  const handleSubmit = async (e) => {
+const handleSubmit = async (e) => {
     e.preventDefault();
+    console.log("Login form submitted"); // Debug log
 
     if (!validateForm()) {
       return;
     }
 
-    setIsLoading(true);
-
-    // Use the auth context to log in
-    const success = await login(formData.email, formData.password);
-
-    setIsLoading(false);
-
-    if (!success) {
-      setErrors({ general: authError || "Login failed" });
+    try {
+      setIsLoading(true);
+      console.log("Attempting login..."); // Debug log
+      
+      // Use the auth context to log in
+      const success = await login(formData.email, formData.password);
+      
+      console.log("Login result:", success); // Debug log
+      
+      if (!success) {
+        console.log("Login failed:", authError); // Debug log
+        setErrors({ general: authError || "Invalid email or password" });
+      }
+      // No need to navigate here - the useEffect will handle it
+    } catch (err) {
+      console.error("Login error:", err); // Debug log
+      setErrors({ general: err.message || "An unexpected error occurred" });
+    } finally {
+      setIsLoading(false);
     }
-    // If successful, the useEffect will handle redirection
   };
 
   // Handle Google login

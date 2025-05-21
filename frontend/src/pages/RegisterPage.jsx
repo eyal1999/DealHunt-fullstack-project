@@ -1,8 +1,10 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 
 const RegisterPage = () => {
   const navigate = useNavigate();
+  const { register, error: authError } = useAuth();
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
@@ -68,48 +70,36 @@ const RegisterPage = () => {
   };
 
   // Handle form submission
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+const handleSubmit = async (e) => {
+  e.preventDefault();
 
-    if (!validateForm()) {
-      return;
-    }
+  if (!validateForm()) {
+    return;
+  }
 
-    setIsLoading(true);
+  setIsLoading(true);
 
-    // In a real app, make an API call to register the user
-    // try {
-    //   const response = await fetch('/api/auth/register', {
-    //     method: 'POST',
-    //     headers: { 'Content-Type': 'application/json' },
-    //     body: JSON.stringify({
-    //       fullName: formData.fullName,
-    //       email: formData.email,
-    //       password: formData.password
-    //     })
-    //   });
-    //
-    //   const data = await response.json();
-    //
-    //   if (response.ok) {
-    //     // Registration successful, navigate to login or homepage
-    //     navigate('/login', { state: { message: 'Registration successful. Please log in.' } });
-    //   } else {
-    //     setErrors({ general: data.message || 'Registration failed' });
-    //   }
-    // } catch (error) {
-    //   setErrors({ general: 'Registration failed. Please try again.' });
-    // }
-
-    // Simulate API delay
-    setTimeout(() => {
-      setIsLoading(false);
-      // Simulate successful registration
-      navigate("/login", {
-        state: { message: "Registration successful. Please log in." },
-      });
-    }, 1000);
+  // Prepare user data for registration
+  const userData = {
+    fullName: formData.fullName,
+    email: formData.email,
+    password: formData.password
   };
+
+  // Call register function from auth context
+  const result = await register(userData);
+
+  setIsLoading(false);
+
+  if (result.success) {
+    // Redirect to login page with success message
+    navigate("/login", {
+      state: { message: "Registration successful. Please log in." }
+    });
+  } else {
+    setErrors({ general: result.error || authError || "Registration failed" });
+  }
+};
 
   // Handle Google signup
   const handleGoogleSignup = () => {

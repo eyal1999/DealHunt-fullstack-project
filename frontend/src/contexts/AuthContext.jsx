@@ -1,4 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from "react";
+import { authService } from "../api/apiServices";
 
 // Create the context
 const AuthContext = createContext();
@@ -18,7 +19,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Load user data from local storage on initial render
+  // Load user data from localStorage on initial render
   useEffect(() => {
     const loadUser = async () => {
       const token = localStorage.getItem("token");
@@ -26,12 +27,17 @@ export const AuthProvider = ({ children }) => {
 
       if (token && userData) {
         try {
-          // In a real app, we would verify the token with the backend here
+          // Set user from localStorage initially
           setCurrentUser(JSON.parse(userData));
+          
+          // Then verify token validity by calling the API
+          const freshUserData = await authService.getCurrentUser();
+          setCurrentUser(freshUserData);
         } catch (err) {
           console.error("Failed to load user:", err);
-          localStorage.removeItem("token");
-          localStorage.removeItem("user");
+          // Clear invalid auth data
+          authService.logout();
+          setCurrentUser(null);
         }
       }
 
@@ -47,41 +53,12 @@ export const AuthProvider = ({ children }) => {
       setError(null);
       setLoading(true);
 
-      // In a real app, call your auth API
-      // const response = await fetch('/api/auth/login', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ email, password })
-      // });
-      //
-      // const data = await response.json();
-      //
-      // if (!response.ok) {
-      //   throw new Error(data.message || 'Login failed');
-      // }
-      //
-      // localStorage.setItem('token', data.token);
-      // localStorage.setItem('user', JSON.stringify(data.user));
-      // setCurrentUser(data.user);
-
-      // For demo purposes, simulate successful login if email contains "test"
-      if (email.includes("test")) {
-        const mockUser = {
-          id: "123",
-          fullName: "Test User",
-          email: email,
-        };
-
-        localStorage.setItem("token", "mock-jwt-token");
-        localStorage.setItem("user", JSON.stringify(mockUser));
-        setCurrentUser(mockUser);
-
-        return true;
-      } else {
-        throw new Error("Invalid email or password");
-      }
+      const data = await authService.login(email, password);
+      
+      setCurrentUser(data.user);
+      return true;
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Login failed");
       return false;
     } finally {
       setLoading(false);
@@ -94,23 +71,10 @@ export const AuthProvider = ({ children }) => {
       setError(null);
       setLoading(true);
 
-      // In a real app, call your auth API
-      // const response = await fetch('/api/auth/register', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify(userData)
-      // });
-      //
-      // const data = await response.json();
-      //
-      // if (!response.ok) {
-      //   throw new Error(data.message || 'Registration failed');
-      // }
-
-      // For demo purposes, always simulate successful registration
+      await authService.register(userData);
       return { success: true };
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Registration failed");
       return { success: false, error: err.message };
     } finally {
       setLoading(false);
@@ -119,8 +83,7 @@ export const AuthProvider = ({ children }) => {
 
   // Logout function
   const logout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    authService.logout();
     setCurrentUser(null);
   };
 

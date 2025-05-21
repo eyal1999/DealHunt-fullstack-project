@@ -9,11 +9,30 @@ const authService = {
    */
   login: async (email, password) => {
     try {
-      const data = await api.post("/auth/login", { email, password });
-      // Save token to localStorage
-      if (data.token) {
-        localStorage.setItem("token", data.token);
+      // Create form data format for OAuth2 endpoint
+      const formData = new FormData();
+      formData.append("username", email); // FastAPI OAuth2 uses 'username' field
+      formData.append("password", password);
+
+      // Send login request to backend
+      const response = await fetch(`${api.baseURL}/auth/login`, {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Login failed');
       }
+
+      const data = await response.json();
+      console.log(data)
+      // Save token to localStorage
+      if (data.access_token) {
+        localStorage.setItem("token", data.access_token);
+        localStorage.setItem("user", JSON.stringify(data.user));
+      }
+      
       return data;
     } catch (error) {
       console.error("Login error:", error);
@@ -28,7 +47,24 @@ const authService = {
    */
   register: async (userData) => {
     try {
-      return await api.post("/auth/register", userData);
+      const response = await fetch(`${api.baseURL}/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          email: userData.email,
+          full_name: userData.fullName, // Adapt field name to match backend
+          password: userData.password
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Registration failed');
+      }
+      
+      return await response.json();
     } catch (error) {
       console.error("Registration error:", error);
       throw error;
@@ -40,6 +76,7 @@ const authService = {
    */
   logout: () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("user");
   },
 
   /**
@@ -48,7 +85,29 @@ const authService = {
    */
   getCurrentUser: async () => {
     try {
-      return await api.get("/auth/me");
+      const token = localStorage.getItem("token");
+      
+      if (!token) {
+        throw new Error("No authentication token found");
+      }
+      
+      const response = await fetch(`${api.baseURL}/auth/me`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          // Token expired or invalid
+          authService.logout();
+          throw new Error("Session expired. Please login again.");
+        }
+        throw new Error("Failed to get user data");
+      }
+      
+      return await response.json();
     } catch (error) {
       console.error("Error fetching current user:", error);
       throw error;
@@ -56,33 +115,12 @@ const authService = {
   },
 
   /**
-   * Request password reset
-   * @param {string} email - User email
-   * @returns {Promise} - Promise that resolves to password reset request result
+   * Check if user is authenticated
+   * @returns {boolean} - True if user is authenticated
    */
-  requestPasswordReset: async (email) => {
-    try {
-      return await api.post("/auth/forgot-password", { email });
-    } catch (error) {
-      console.error("Error requesting password reset:", error);
-      throw error;
-    }
-  },
-
-  /**
-   * Reset password
-   * @param {string} token - Password reset token
-   * @param {string} password - New password
-   * @returns {Promise} - Promise that resolves to password reset result
-   */
-  resetPassword: async (token, password) => {
-    try {
-      return await api.post("/auth/reset-password", { token, password });
-    } catch (error) {
-      console.error("Error resetting password:", error);
-      throw error;
-    }
-  },
+  isAuthenticated: () => {
+    return localStorage.getItem("token") !== null;
+  }
 };
 
 export default authService;

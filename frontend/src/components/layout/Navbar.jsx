@@ -8,7 +8,8 @@ const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const navigate = useNavigate();
   const { currentUser, logout } = useAuth();
-
+  console.log("##################")
+  console.log(currentUser)
   // Handle search form submission
   const handleSearch = (e) => {
     e.preventDefault();
@@ -85,7 +86,7 @@ const Navbar = () => {
                 <div className="relative group">
                   <button className="flex items-center text-primary hover:text-primary-dark focus:outline-none">
                     <span className="mr-1">
-                      {currentUser.fullName.split(" ")[0]}
+                      {currentUser["full_name"].split(" ")[0]}
                     </span>
                     <svg
                       className="w-4 h-4"

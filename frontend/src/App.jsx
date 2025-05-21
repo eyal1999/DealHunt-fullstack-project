@@ -14,6 +14,7 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 
 function App() {
+
   return (
     <AuthProvider>
       <BrowserRouter>
