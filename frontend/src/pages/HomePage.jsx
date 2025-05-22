@@ -1,9 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ProductCard from "../components/product/ProductCard";
-import BlutoothSpeaker from "../assets/bluetooth_speaker.jpg";
-import Smartwatch from "../assets/smartwatch.jpg";
-import WirelessEarbuds from "../assets/wireless_earbuds.jpg";
 
 const HomePage = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -16,7 +13,7 @@ const HomePage = () => {
       title: "Wireless Earbuds with Noise Cancellation and Long Battery Life",
       original_price: 59.99,
       sale_price: 39.99,
-      image: WirelessEarbuds,
+      image: "",
       detail_url: "/product/aliexpress/1234",
       affiliate_link: "#",
       marketplace: "aliexpress",
@@ -27,7 +24,7 @@ const HomePage = () => {
       title: "Smart Watch with Heart Rate Monitor and Sleep Tracking",
       original_price: 89.99,
       sale_price: 69.99,
-      image: Smartwatch,
+      image: "",
       detail_url: "/product/ebay/5678",
       affiliate_link: "#",
       marketplace: "ebay",
@@ -38,7 +35,7 @@ const HomePage = () => {
       title: "Portable Bluetooth Speaker Waterproof",
       original_price: 45.99,
       sale_price: 29.99,
-      image: BlutoothSpeaker,
+      image: "",
       detail_url: "/product/aliexpress/9012",
       affiliate_link: "#",
       marketplace: "aliexpress",

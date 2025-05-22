@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, AnyHttpUrl, Field, ConfigDict
 
 # ── Search / detail payloads ────────────────────────────────────
@@ -12,7 +12,7 @@ class ProductSummary(BaseModel):
     detail_url: AnyHttpUrl
     affiliate_link: AnyHttpUrl
     marketplace: str = "aliexpress"
-    sold_count: Optional[int] = None        # added for multi‑provider
+    sold_count: Optional[int] = None
     rating: Optional[float] = None
     shipping_cost: Optional[float] = None
     cached_at: Optional[datetime] = None
@@ -39,6 +39,38 @@ class ProductDetail(BaseModel):
     rating: Optional[float] = None
     shipping_cost: Optional[float] = None
     cached_at: Optional[datetime] = None
+    
+    # Additional product information
+    description: Optional[str] = None
+    condition: Optional[str] = None  # New, Used, Refurbished, etc.
+    brand: Optional[str] = None
+    color: Optional[str] = None
+    material: Optional[str] = None
+    
+    # Seller information (eBay) or Shop information (AliExpress)
+    seller: Optional[Dict[str, Any]] = None
+    
+    # Location information
+    location: Optional[Dict[str, str]] = None
+    
+    # Shipping information
+    shipping: Optional[List[Dict[str, Any]]] = None
+    
+    # Product specifications
+    specifications: Optional[Dict[str, str]] = None
+    
+    # Return policy information
+    return_policy: Optional[Dict[str, Any]] = None
+    
+    # Additional metadata
+    item_creation_date: Optional[str] = None
+    top_rated_seller: Optional[bool] = None
+    
+    # AliExpress-specific fields
+    product_video_url: Optional[str] = None
+    categories: Optional[Dict[str, Any]] = None
+    discount_percentage: Optional[float] = None
+    commission_rate: Optional[str] = None
 
     model_config = ConfigDict(
         from_attributes=True

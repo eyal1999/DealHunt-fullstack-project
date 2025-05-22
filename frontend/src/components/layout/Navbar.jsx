@@ -8,8 +8,7 @@ const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const navigate = useNavigate();
   const { currentUser, logout } = useAuth();
-  console.log("##################")
-  console.log(currentUser)
+
   // Handle search form submission
   const handleSearch = (e) => {
     e.preventDefault();

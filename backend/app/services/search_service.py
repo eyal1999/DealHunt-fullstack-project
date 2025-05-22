@@ -157,15 +157,113 @@ def fetch_product_detail(product_id: str) -> dict:
     links = generate_affiliate_links([item["product_detail_url"]])
     affiliate_url = links[0].promotion_link if links else item["product_detail_url"]
 
+    # Extract shop/seller information for AliExpress
+    seller_info = {
+        "shop_name": item.get("shop_name", ""),
+        "shop_url": item.get("shop_url", ""),
+        "shop_id": item.get("shop_id", ""),
+        "evaluate_rate": item.get("evaluate_rate", ""),  # Customer satisfaction
+    }
+
+    # Extract category information
+    categories = {
+        "first_level": item.get("first_level_category_name", ""),
+        "second_level": item.get("second_level_category_name", ""),
+        "first_level_id": item.get("first_level_category_id", ""),
+        "second_level_id": item.get("second_level_category_id", ""),
+    }
+
+    # Extract all available images
+    all_images = [item["product_main_image_url"]]
+    
+    # Add images from image_urls (detailed product images)
+    image_urls = item.get("image_urls", {}).get("string", [])
+    if isinstance(image_urls, list):
+        all_images.extend(image_urls)
+    
+    # Add small images if available and different
+    small_image_urls = item.get("product_small_image_urls", {}).get("string", [])
+    if isinstance(small_image_urls, list):
+        for img in small_image_urls:
+            if img not in all_images:
+                all_images.append(img)
+    
+    # Remove duplicates while preserving order
+    all_images = list(dict.fromkeys([img for img in all_images if img]))
+
+    # Extract discount percentage
+    discount_str = item.get("discount", "0%")
+    try:
+        discount_percent = float(discount_str.replace("%", ""))
+    except (ValueError, AttributeError):
+        discount_percent = 0
+
+    # Calculate evaluate_rate as a rating (convert percentage to 5-star scale)
+    rating = None
+    if item.get("evaluate_rate"):
+        try:
+            eval_rate = float(item.get("evaluate_rate", "0").replace("%", ""))
+            # Convert percentage to 5-star scale (86.2% = ~4.3 stars)
+            rating = round((eval_rate / 100) * 5, 1)
+        except (ValueError, AttributeError):
+            rating = None
+
     return ProductDetail(
         product_id=str(item["product_id"]),
         title=item["product_title"],
         original_price=float(item["original_price"]),
         sale_price=float(item["sale_price"]),
         main_image=item["product_main_image_url"],
-        images=item.get("image_urls", {}).get("string", []),
+        images=all_images,
         url=item["product_detail_url"],
         affiliate_link=affiliate_url,
         marketplace="aliexpress",
-        sold_count=int(item.get("lastest_volume", 0)), 
+        sold_count=int(item.get("lastest_volume", 0)),
+        rating=rating,
+        
+        # Enhanced AliExpress-specific fields
+        description=None,  # AliExpress doesn't provide detailed description in this API
+        condition="New",   # AliExpress products are typically new
+        brand=None,        # Not available in this API response
+        color=None,        # Not available in this API response
+        material=None,     # Not available in this API response
+        
+        # AliExpress seller info (shop-based)
+        seller=seller_info,
+        
+        # Location info (AliExpress is primarily China-based)
+        location={"country": "China", "city": "", "state": ""},
+        
+        # Shipping info (basic for AliExpress)
+        shipping=[{
+            "service": "Standard Shipping",
+            "cost": 0,  # Often free shipping
+            "currency": "USD"
+        }],
+        
+        # Product specifications (not available in detail API, but we can add categories)
+        specifications={
+            "Category": categories.get("first_level", ""),
+            "Subcategory": categories.get("second_level", ""),
+            "Marketplace": "AliExpress",
+            "Product ID": str(item["product_id"]),
+            "Discount": f"{discount_percent}%" if discount_percent > 0 else "No discount"
+        },
+        
+        # Return policy (generic for AliExpress)
+        return_policy={
+            "returns_accepted": True,  # AliExpress generally accepts returns
+            "return_period": "15 days", # Typical AliExpress return period
+            "return_method": "Buyer protection"
+        },
+        
+        # Additional metadata
+        item_creation_date=None,
+        top_rated_seller=False,  # We could enhance this based on evaluate_rate
+        
+        # AliExpress-specific additional fields
+        product_video_url=item.get("product_video_url", ""),
+        categories=categories,
+        discount_percentage=discount_percent,
+        commission_rate=item.get("commission_rate", ""),
     ).dict()
