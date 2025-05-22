@@ -1,152 +1,71 @@
 import React, { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import ProductCard from "../components/product/ProductCard";
+import { productService } from "../api/apiServices";
 
 const SearchResultsPage = () => {
   const [searchParams] = useSearchParams();
   const query = searchParams.get("q") || "";
   const category = searchParams.get("category") || "";
 
+  // React State - these are the "reactive" variables that trigger re-renders
   const [isLoading, setIsLoading] = useState(true);
   const [products, setProducts] = useState([]);
   const [sortBy, setSortBy] = useState("price_low");
+  const [error, setError] = useState(null);
 
-  // In a real app, these would be fetched from the backend
-  const mockProducts = [
-    {
-      product_id: "1234",
-      title: "Wireless Earbuds with Noise Cancellation and Long Battery Life",
-      original_price: 59.99,
-      sale_price: 39.99,
-      image: "https://via.placeholder.com/300",
-      detail_url: "/product/aliexpress/1234",
-      affiliate_link: "#",
-      marketplace: "aliexpress",
-      rating: 4.5,
-      shipping_cost: 0,
-    },
-    {
-      product_id: "5678",
-      title: "Smart Watch with Heart Rate Monitor and Sleep Tracking",
-      original_price: 89.99,
-      sale_price: 69.99,
-      image: "https://via.placeholder.com/300",
-      detail_url: "/product/ebay/5678",
-      affiliate_link: "#",
-      marketplace: "ebay",
-      rating: 4.2,
-      shipping_cost: 3.99,
-    },
-    {
-      product_id: "9012",
-      title: "Portable Bluetooth Speaker Waterproof",
-      original_price: 45.99,
-      sale_price: 29.99,
-      image: "https://via.placeholder.com/300",
-      detail_url: "/product/aliexpress/9012",
-      affiliate_link: "#",
-      marketplace: "aliexpress",
-      rating: 4.7,
-      shipping_cost: 0,
-    },
-    {
-      product_id: "3456",
-      title: "Digital Camera 4K with Wide Angle Lens",
-      original_price: 299.99,
-      sale_price: 249.99,
-      image: "https://via.placeholder.com/300",
-      detail_url: "/product/ebay/3456",
-      affiliate_link: "#",
-      marketplace: "ebay",
-      rating: 4.4,
-      shipping_cost: 0,
-    },
-    {
-      product_id: "7890",
-      title: "Mechanical Gaming Keyboard RGB Backlit",
-      original_price: 79.99,
-      sale_price: 59.99,
-      image: "https://via.placeholder.com/300",
-      detail_url: "/product/aliexpress/7890",
-      affiliate_link: "#",
-      marketplace: "aliexpress",
-      rating: 4.6,
-      shipping_cost: 5.99,
-    },
-    {
-      product_id: "2345",
-      title: "Wireless Mouse for Gaming and Office",
-      original_price: 29.99,
-      sale_price: 19.99,
-      image: "https://via.placeholder.com/300",
-      detail_url: "/product/ebay/2345",
-      affiliate_link: "#",
-      marketplace: "ebay",
-      rating: 4.3,
-      shipping_cost: 2.99,
-    },
-  ];
-
-  // Simulate API call to fetch products
+  // useEffect Hook - runs side effects (like API calls) when dependencies change
   useEffect(() => {
     const fetchProducts = async () => {
-      setIsLoading(true);
-
-      // In a real app, we would make an API call like this:
-      // try {
-      //   const response = await fetch(`/api/search?q=${query}&sort=${sortBy}`);
-      //   const data = await response.json();
-      //   setProducts(data.results);
-      // } catch (error) {
-      //   console.error('Error fetching products:', error);
-      // }
-
-      // For now, we'll simulate an API call with mock data
-      setTimeout(() => {
-        let filteredProducts = [...mockProducts];
-
-        // Filter by query (simple case-insensitive match)
-        if (query) {
-          filteredProducts = filteredProducts.filter((product) =>
-            product.title.toLowerCase().includes(query.toLowerCase())
-          );
-        }
-
-        // Filter by category (if provided)
-        if (category) {
-          // This is a simplification - in a real app, products would have category info
-          if (category === "Electronics") {
-            filteredProducts = filteredProducts.filter((product) =>
-              [
-                "camera",
-                "speaker",
-                "keyboard",
-                "mouse",
-                "earbuds",
-                "watch",
-              ].some((keyword) => product.title.toLowerCase().includes(keyword))
-            );
-          }
-        }
-
-        // Sort products
-        if (sortBy === "price_low") {
-          filteredProducts.sort((a, b) => a.sale_price - b.sale_price);
-        } else if (sortBy === "price_high") {
-          filteredProducts.sort((a, b) => b.sale_price - a.sale_price);
-        }
-
-        setProducts(filteredProducts);
+      // Only search if we have a query or category
+      if (!query && !category) {
+        setProducts([]);
         setIsLoading(false);
-      }, 800); // Simulate a 800ms API delay
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        console.log("Fetching products with query:", query, "sort:", sortBy);
+
+        // Call the real API using our productService
+        const searchQuery = query || category;
+        const response = await productService.searchProducts(
+          searchQuery,
+          sortBy
+        );
+
+        console.log("API Response:", response);
+
+        // Update state with the API response
+        // The response should have a 'results' array based on your backend SearchResponse model
+        setProducts(response.results || []);
+      } catch (err) {
+        console.error("Error fetching products:", err);
+        setError(err.message || "Failed to fetch products. Please try again.");
+        setProducts([]);
+      } finally {
+        // This runs regardless of success or failure
+        setIsLoading(false);
+      }
     };
 
     fetchProducts();
-  }, [query, category, sortBy]);
+  }, [query, category, sortBy]); // Dependencies - effect runs when any of these change
 
-  // Handle sorting change
+  // Handle sorting change - this is an event handler function
   const handleSortChange = (newSortBy) => {
     setSortBy(newSortBy);
+    // The useEffect will automatically run again because sortBy is in its dependencies
+  };
+
+  // Retry function for error state
+  const handleRetry = () => {
+    setError(null);
+    // Trigger useEffect to run again by changing a dependency
+    setSortBy(sortBy); // This will trigger re-fetch
   };
 
   return (
@@ -161,9 +80,28 @@ const SearchResultsPage = () => {
             : "All Products"}
         </h1>
         <p className="text-gray-600">
-          {isLoading ? "Searching..." : `Found ${products.length} products`}
+          {isLoading
+            ? "Searching..."
+            : error
+            ? "Search failed"
+            : `Found ${products.length} products`}
         </p>
       </div>
+
+      {/* Error State */}
+      {error && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+          <div className="flex justify-between items-center">
+            <span>{error}</span>
+            <button
+              onClick={handleRetry}
+              className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Search Results Layout */}
       <div className="flex flex-col md:flex-row gap-6">
@@ -271,7 +209,8 @@ const SearchResultsPage = () => {
               <select
                 value={sortBy}
                 onChange={(e) => handleSortChange(e.target.value)}
-                className="text-sm border-gray-300 rounded p-1 focus:outline-none focus:ring-1 focus:ring-primary"
+                disabled={isLoading}
+                className="text-sm border-gray-300 rounded p-1 focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
               >
                 <option value="price_low">Price: Low to High</option>
                 <option value="price_high">Price: High to Low</option>
@@ -283,6 +222,19 @@ const SearchResultsPage = () => {
           {isLoading ? (
             <div className="flex justify-center items-center h-64">
               <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+            </div>
+          ) : error ? (
+            <div className="text-center py-12">
+              <p className="text-xl font-medium mb-4">Something went wrong</p>
+              <p className="text-gray-600 mb-6">
+                We couldn't load the search results. Please try again.
+              </p>
+              <button
+                onClick={handleRetry}
+                className="bg-primary text-white px-4 py-2 rounded hover:bg-blue-700"
+              >
+                Try Again
+              </button>
             </div>
           ) : products.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
