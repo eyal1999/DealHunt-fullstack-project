@@ -1,19 +1,23 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { useParams, Link } from "react-router-dom";
-import { productService } from "../api/apiServices";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
+import { useParams, Link, useNavigate } from "react-router-dom";
+import { productService, wishlistService } from "../api/apiServices";
+import { useAuth } from "../contexts/AuthContext";
 
-// =====================================================
-// ENHANCED IMAGE LOADING COMPONENTS AND HOOKS
-// =====================================================
-
-// Custom hook for handling AliExpress image loading with retry logic
+// Enhanced hook for handling AliExpress images with CORS issues
 const useAliExpressImage = (originalSrc, fallbackSrc) => {
-  const [imageSrc, setImageSrc] = useState(null);
+  const [imageSrc, setImageSrc] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
 
   useEffect(() => {
     if (!originalSrc) {
+      setImageSrc(fallbackSrc || "");
       setIsLoading(false);
       setHasError(true);
       return;
@@ -22,57 +26,36 @@ const useAliExpressImage = (originalSrc, fallbackSrc) => {
     setIsLoading(true);
     setHasError(false);
 
-    // Try to load the image with various fixes for AliExpress
-    const tryLoadImage = async () => {
-      const imagesToTry = [
-        originalSrc,
-        // Remove query parameters that might cause issues
-        originalSrc.split("?")[0],
-        // Try different size variants (AliExpress specific)
-        originalSrc.replace("_50x50.jpg", "_350x350.jpg"),
-        originalSrc.replace("_100x100.jpg", "_350x350.jpg"),
-        originalSrc.replace("_200x200.jpg", "_350x350.jpg"),
-        // Try HTTPS if HTTP
-        originalSrc.replace("http://", "https://"),
-        fallbackSrc,
-      ].filter(Boolean); // Remove any null/undefined values
-
-      for (const src of imagesToTry) {
-        try {
-          const success = await loadImage(src);
-          if (success) {
-            setImageSrc(src);
-            setIsLoading(false);
-            return;
-          }
-        } catch (error) {
-          console.log(`Failed to load image: ${src}`);
+    // For AliExpress images, we might need to handle CORS
+    testImageLoad(originalSrc)
+      .then((success) => {
+        if (success) {
+          setImageSrc(originalSrc);
+        } else {
+          setImageSrc(fallbackSrc || "");
+          setHasError(true);
         }
-      }
-
-      // If all attempts failed
-      setHasError(true);
-      setIsLoading(false);
-    };
-
-    tryLoadImage();
+      })
+      .catch(() => {
+        setImageSrc(fallbackSrc || "");
+        setHasError(true);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
   }, [originalSrc, fallbackSrc]);
 
   return { imageSrc, isLoading, hasError };
 };
 
-// Helper function to load an image and return a promise
-const loadImage = (src) => {
+// Helper function to test if an image can be loaded
+const testImageLoad = (src) => {
   return new Promise((resolve, reject) => {
     const img = new Image();
-
-    // Set crossOrigin to try to avoid CORS issues
-    img.crossOrigin = "anonymous";
-
     img.onload = () => resolve(true);
     img.onerror = () => reject(false);
 
-    // Add timestamp to bypass cache if needed
+    // Add timestamp to bypass cache issues
     img.src = src.includes("?")
       ? `${src}&t=${Date.now()}`
       : `${src}?t=${Date.now()}`;
@@ -135,6 +118,117 @@ const ProductImage = ({
   );
 };
 
+// NEW: Enhanced Description Component with better text handling
+const ProductDescription = ({ description, title }) => {
+  const [showFullDescription, setShowFullDescription] = useState(false);
+
+  // Check if description contains HTML tags
+  const containsHTML = useMemo(() => {
+    if (!description) return false;
+    return /<[^>]*>/g.test(description);
+  }, [description]);
+
+  // Clean and process the description
+  const processedDescription = useMemo(() => {
+    if (!description) return "";
+
+    // If it's already cleaned text (no HTML), return as is
+    if (!containsHTML) {
+      return description;
+    }
+
+    // If it contains HTML, we need to be more careful
+    // Create a temporary div to parse HTML safely
+    const tempDiv = document.createElement("div");
+    tempDiv.innerHTML = description;
+
+    // Get text content only
+    let textContent = tempDiv.textContent || tempDiv.innerText || "";
+
+    // Additional cleaning for any remaining unwanted patterns
+    const unwantedPatterns = [
+      /similar\s+items?/gi,
+      /people\s+also\s+(bought|viewed|liked)/gi,
+      /you\s+may\s+also\s+like/gi,
+      /recommended\s+for\s+you/gi,
+      /visit\s+my\s+store/gi,
+      /see\s+other\s+items/gi,
+      /browse\s+similar/gi,
+      /check\s+out\s+my\s+other/gi,
+    ];
+
+    // Remove lines containing unwanted patterns
+    const lines = textContent.split("\n");
+    const cleanLines = lines.filter((line) => {
+      const cleanLine = line.trim().toLowerCase();
+      return !unwantedPatterns.some((pattern) => pattern.test(cleanLine));
+    });
+
+    return cleanLines.join("\n").trim();
+  }, [description, containsHTML]);
+
+  // Split description into paragraphs for better formatting
+  const paragraphs = useMemo(() => {
+    if (!processedDescription) return [];
+
+    return processedDescription
+      .split("\n")
+      .map((para) => para.trim())
+      .filter((para) => para.length > 0)
+      .slice(0, showFullDescription ? undefined : 3); // Show first 3 paragraphs by default
+  }, [processedDescription, showFullDescription]);
+
+  // Check if description is truncated
+  const isTruncated = useMemo(() => {
+    if (!processedDescription) return false;
+    const allParagraphs = processedDescription
+      .split("\n")
+      .filter((p) => p.trim().length > 0);
+    return allParagraphs.length > 3;
+  }, [processedDescription]);
+
+  if (!processedDescription) {
+    return (
+      <div className="mb-6">
+        <h2 className="text-lg font-semibold mb-2">Description</h2>
+        <div className="text-gray-500 italic">
+          No description available for this product.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-6">
+      <h2 className="text-lg font-semibold mb-3">Description</h2>
+
+      <div className="space-y-3">
+        {paragraphs.map((paragraph, index) => (
+          <p key={index} className="text-gray-700 leading-relaxed">
+            {paragraph}
+          </p>
+        ))}
+
+        {isTruncated && (
+          <button
+            onClick={() => setShowFullDescription(!showFullDescription)}
+            className="text-blue-600 hover:text-blue-800 font-medium text-sm mt-2 transition-colors"
+          >
+            {showFullDescription ? "Show Less" : "Show More"}
+          </button>
+        )}
+      </div>
+
+      {/* Show warning if original had HTML content */}
+      {containsHTML && (
+        <div className="mt-3 text-xs text-gray-500">
+          Description has been cleaned and formatted for better readability.
+        </div>
+      )}
+    </div>
+  );
+};
+
 // Enhanced Product Image Section Component
 const ProductImageSection = ({
   product,
@@ -183,17 +277,17 @@ const ProductImageSection = ({
             onClick={() => setShowVideo(false)}
             className={`px-3 py-1 rounded text-sm transition-colors ${
               !showVideo
-                ? "bg-primary text-white"
+                ? "bg-blue-600 text-white"
                 : "bg-gray-200 text-gray-700 hover:bg-gray-300"
             }`}
           >
-            Images ({processedImages.length})
+            Images
           </button>
           <button
             onClick={() => setShowVideo(true)}
             className={`px-3 py-1 rounded text-sm transition-colors ${
               showVideo
-                ? "bg-primary text-white"
+                ? "bg-blue-600 text-white"
                 : "bg-gray-200 text-gray-700 hover:bg-gray-300"
             }`}
           >
@@ -203,128 +297,99 @@ const ProductImageSection = ({
       )}
 
       {/* Main Image/Video Display */}
-      <div className="mb-4 border rounded-lg overflow-hidden bg-white">
+      <div className="mb-4">
         {showVideo && product.product_video_url ? (
-          <video
-            controls
-            className="w-full h-auto max-h-96"
-            poster={processedImages[0]}
-            onError={(e) => {
-              console.log("Video failed to load, switching to images");
-              setShowVideo(false);
-            }}
-          >
-            <source src={product.product_video_url} type="video/mp4" />
-            Your browser does not support the video tag.
-          </video>
+          <div className="w-full h-96 bg-black rounded-lg overflow-hidden">
+            <video
+              controls
+              className="w-full h-full object-contain"
+              poster={processedImages[0] || ""}
+            >
+              <source src={product.product_video_url} type="video/mp4" />
+              Your browser does not support the video tag.
+            </video>
+          </div>
         ) : (
-          <ProductImage
-            src={processedImages[activeImage] || processedImages[0]}
-            alt={`${product.title} - Main image`}
-            className="w-full h-auto max-h-96 object-contain p-4"
-          />
+          <div className="w-full h-96 bg-gray-100 rounded-lg overflow-hidden">
+            {processedImages.length > 0 ? (
+              <ProductImage
+                src={processedImages[activeImage] || processedImages[0]}
+                alt={product.title}
+                className="w-full h-full object-contain cursor-zoom-in"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-gray-500">
+                <div className="text-center">
+                  <div className="text-4xl mb-2">📷</div>
+                  <span>No images available</span>
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
       {/* Thumbnail Images */}
-      {!showVideo && processedImages.length > 1 && (
-        <div className="space-y-2">
-          <div className="text-sm text-gray-600 font-medium">
-            All Images ({processedImages.length})
-          </div>
-          <div className="grid grid-cols-4 gap-2">
-            {processedImages.slice(0, 8).map((image, index) => (
-              <div
-                key={`${image}-${index}`} // Better key for React reconciliation
-                className={`
-                  border rounded cursor-pointer transition-all duration-200 relative
-                  ${
-                    index === activeImage
-                      ? "border-primary ring-2 ring-primary/50 shadow-md"
-                      : "border-gray-200 hover:border-gray-300 hover:shadow-sm"
-                  }
-                `}
-                onClick={() => handleThumbnailClick(index)}
-              >
-                <ProductImage
-                  src={image}
-                  alt={`${product.title} - Thumbnail ${index + 1}`}
-                  className="w-full aspect-square object-cover"
-                  showLoader={false}
-                />
-
-                {/* Active indicator */}
-                {index === activeImage && (
-                  <div className="absolute top-1 right-1 bg-primary text-white text-xs px-1 py-0.5 rounded">
-                    ✓
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* Show more images indicator */}
-          {processedImages.length > 8 && (
-            <div className="text-sm text-gray-500 text-center">
-              +{processedImages.length - 8} more images
-            </div>
-          )}
+      {processedImages.length > 1 && (
+        <div className="grid grid-cols-4 gap-2">
+          {processedImages.map((image, index) => (
+            <button
+              key={index}
+              onClick={() => handleThumbnailClick(index)}
+              className={`w-full h-20 bg-gray-100 rounded border-2 overflow-hidden transition-all ${
+                activeImage === index
+                  ? "border-blue-500 shadow-md"
+                  : "border-gray-200 hover:border-gray-300"
+              }`}
+            >
+              <ProductImage
+                src={image}
+                alt={`${product.title} - Image ${index + 1}`}
+                className="w-full h-full object-cover"
+                showLoader={false}
+              />
+            </button>
+          ))}
         </div>
       )}
     </div>
   );
 };
 
-// =====================================================
-// MAIN PRODUCT DETAIL PAGE COMPONENT
-// =====================================================
-
 const ProductDetailPage = () => {
   const { marketplace, id } = useParams();
+  const navigate = useNavigate();
+  const { isAuthenticated, currentUser } = useAuth();
 
+  // State management
   const [product, setProduct] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeImage, setActiveImage] = useState(0);
   const [showVideo, setShowVideo] = useState(false);
 
-  // Reset active image when product changes
-  useEffect(() => {
-    if (product) {
-      setActiveImage(0);
-      setShowVideo(false);
-    }
-  }, [product]);
+  // Wishlist state
+  const [isAddingToWishlist, setIsAddingToWishlist] = useState(false);
+  const [wishlistMessage, setWishlistMessage] = useState(null);
+  const [isInWishlist, setIsInWishlist] = useState(false);
 
-  // FIXED: Proper fetchProductDetail with retry capability
+  // Fetch product detail with proper error handling
   const fetchProductDetail = useCallback(async () => {
     if (!marketplace || !id) return;
 
+    setIsLoading(true);
+    setError(null);
+
     try {
-      setIsLoading(true);
-      setError(null);
-
-      console.log(`Fetching product details for ${marketplace}/${id}`);
-
-      const productData = await productService.getProductDetails(
-        marketplace,
-        id
-      );
-      console.log("Product data received:", productData);
-
-      setProduct(productData);
+      // Use the existing productService instead of raw fetch
+      const data = await productService.getProductDetails(marketplace, id);
+      setProduct(data);
     } catch (err) {
-      console.error("Error fetching product details:", err);
-
-      // Better error message handling
+      console.error("Error fetching product detail:", err);
       let errorMessage = "Failed to load product details";
-      if (err.message.includes("404") || err.message.includes("not found")) {
-        errorMessage = "Product not found";
-      } else if (
-        err.message.includes("network") ||
-        err.message.includes("fetch")
-      ) {
-        errorMessage = "Network error. Please check your connection";
+
+      if (!navigator.onLine) {
+        errorMessage = "No internet connection. Please check your connection";
       } else if (err.message) {
         errorMessage = err.message;
       }
@@ -341,6 +406,109 @@ const ProductDetailPage = () => {
       fetchProductDetail();
     }
   }, [fetchProductDetail]);
+
+  // Clear wishlist message after a delay
+  useEffect(() => {
+    if (wishlistMessage) {
+      const timer = setTimeout(() => {
+        setWishlistMessage(null);
+      }, 5000); // Clear after 5 seconds
+
+      return () => clearTimeout(timer);
+    }
+  }, [wishlistMessage]);
+
+  // Handle adding product to wishlist
+  const handleAddToWishlist = useCallback(async () => {
+    // Check if user is authenticated
+    if (!isAuthenticated) {
+      // Redirect to login with information about the intended action
+      navigate("/login", {
+        state: {
+          from: `/product/${marketplace}/${id}`,
+          message: "Please log in to add items to your wishlist",
+          action: "add_to_wishlist",
+          productTitle: product?.title || "this product",
+        },
+      });
+      return;
+    }
+
+    if (!product || isAddingToWishlist) return;
+
+    try {
+      setIsAddingToWishlist(true);
+
+      // Prepare product data for wishlist
+      const wishlistData = {
+        product_id: product.product_id,
+        marketplace: product.marketplace,
+        title: product.title,
+        original_price: product.original_price,
+        sale_price: product.sale_price,
+        image: product.main_image,
+        detail_url: window.location.href, // Current product page URL
+        affiliate_link: product.affiliate_link,
+      };
+
+      await wishlistService.addToWishlist(wishlistData);
+
+      setIsInWishlist(true);
+      setWishlistMessage({
+        type: "success",
+        text: `"${product.title}" has been added to your wishlist!`,
+      });
+    } catch (error) {
+      console.error("Error adding to wishlist:", error);
+
+      let errorMessage = "Failed to add item to wishlist. Please try again.";
+
+      if (
+        error.message.includes("401") ||
+        error.message.includes("Unauthorized")
+      ) {
+        errorMessage = "Your session has expired. Please log in again.";
+        // Redirect to login if token is invalid
+        navigate("/login", {
+          state: {
+            from: `/product/${marketplace}/${id}`,
+            message:
+              "Your session has expired. Please log in to add items to your wishlist.",
+          },
+        });
+        return;
+      }
+
+      setWishlistMessage({
+        type: "error",
+        text: errorMessage,
+      });
+    } finally {
+      setIsAddingToWishlist(false);
+    }
+  }, [isAuthenticated, product, isAddingToWishlist, navigate, marketplace, id]);
+
+  // Check if product is already in wishlist (when user is authenticated)
+  useEffect(() => {
+    const checkWishlistStatus = async () => {
+      if (!isAuthenticated || !product) return;
+
+      try {
+        // Use the helper function from wishlistService
+        const inWishlist = await wishlistService.isInWishlist(
+          product.product_id,
+          product.marketplace
+        );
+        setIsInWishlist(inWishlist);
+      } catch (error) {
+        console.error("Error checking wishlist status:", error);
+        // Don't show error to user for this background check
+        setIsInWishlist(false);
+      }
+    };
+
+    checkWishlistStatus();
+  }, [isAuthenticated, product]);
 
   // FIXED: Retry function that actually works
   const handleRetry = useCallback(() => {
@@ -386,7 +554,31 @@ const ProductDetailPage = () => {
     }
   }, []);
 
-  // Format seller/shop information for both eBay and AliExpress
+  // Format specification value safely
+  const formatSpecificationValue = useCallback((value) => {
+    if (!value) return "N/A";
+
+    // If value is an array, join it properly
+    if (Array.isArray(value)) {
+      return value.join(", ");
+    }
+
+    // If value is a string that looks like comma-separated characters, fix it
+    if (typeof value === "string") {
+      // Check if the string looks like individual characters separated by commas
+      // (e.g., "N, E, S, -, 0, 0, 1" should become "NES-001")
+      if (
+        value.includes(", ") &&
+        value.split(", ").every((part) => part.length <= 1)
+      ) {
+        return value.replace(/, /g, "");
+      }
+      return value;
+    }
+
+    // Convert other types to string
+    return String(value);
+  }, []);
   const formatSellerInfo = useCallback((seller, marketplace) => {
     if (!seller) return null;
 
@@ -455,79 +647,75 @@ const ProductDetailPage = () => {
   }, []);
 
   // Format shipping information
-  const formatShippingInfo = useCallback(
-    (shipping, location) => {
-      if (!shipping && !location) return null;
+  const formatShippingInfo = useCallback((shipping, location) => {
+    if (!shipping && !location) return null;
 
-      return (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <h3 className="font-semibold text-green-800 mb-2">
-            Shipping & Location
-          </h3>
+    return (
+      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+        <h3 className="font-semibold text-green-800 mb-2">
+          Shipping & Location
+        </h3>
 
-          {location && (
-            <div className="mb-3">
-              <span className="text-sm text-gray-600">Ships from: </span>
-              <span className="text-sm font-medium">
-                {[location.city, location.state, location.country]
-                  .filter(Boolean)
-                  .join(", ")}
-              </span>
-            </div>
-          )}
+        {location && (
+          <div className="mb-3 text-sm">
+            <span className="text-gray-600">Ships from: </span>
+            <span className="font-medium">
+              {[location.city, location.state_or_province, location.country]
+                .filter(Boolean)
+                .join(", ")}
+            </span>
+          </div>
+        )}
 
-          {shipping && shipping.length > 0 && (
-            <div className="space-y-2">
-              <span className="text-sm font-medium text-gray-700">
-                Shipping Options:
-              </span>
-              {shipping.slice(0, 3).map((option, index) => (
-                <div key={index} className="flex justify-between text-sm">
-                  <span className="text-gray-600">
-                    {option.service || "Standard"}:
-                  </span>
-                  <span className="font-medium">
-                    {option.cost > 0 ? formatPrice(option.cost) : "Free"}
-                  </span>
+        {shipping && shipping.length > 0 && (
+          <div className="space-y-2">
+            {shipping.slice(0, 3).map((option, index) => (
+              <div key={index} className="flex justify-between text-sm">
+                <span className="text-gray-600">{option.type}:</span>
+                <div className="text-right">
+                  <div className="font-medium">
+                    {option.cost === "0" ? "Free" : `$${option.cost}`}
+                  </div>
+                  {option.estimated_delivery && (
+                    <div className="text-xs text-gray-500">
+                      Est:{" "}
+                      {new Date(option.estimated_delivery).toLocaleDateString()}
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    },
-    [formatPrice]
-  );
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }, []);
 
   // Format return policy
   const formatReturnPolicy = useCallback((returnPolicy) => {
     if (!returnPolicy) return null;
 
     return (
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-        <h3 className="font-semibold text-yellow-800 mb-2">Return Policy</h3>
+      <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+        <h3 className="font-semibold text-orange-800 mb-2">Return Policy</h3>
         <div className="space-y-1 text-sm">
           <div className="flex justify-between">
-            <span className="text-gray-600">Returns Accepted:</span>
-            <span
-              className={`font-medium ${
-                returnPolicy.returns_accepted
-                  ? "text-green-600"
-                  : "text-red-600"
-              }`}
-            >
-              {returnPolicy.returns_accepted ? "Yes" : "No"}
+            <span className="text-gray-600">Returns:</span>
+            <span className="font-medium">
+              {returnPolicy.returns_accepted ? "Accepted" : "Not Accepted"}
             </span>
           </div>
+
           {returnPolicy.return_period && (
             <div className="flex justify-between">
-              <span className="text-gray-600">Return Period:</span>
+              <span className="text-gray-600">Period:</span>
               <span className="font-medium">{returnPolicy.return_period}</span>
             </div>
           )}
+
           {returnPolicy.return_method && (
             <div className="flex justify-between">
-              <span className="text-gray-600">Return Method:</span>
+              <span className="text-gray-600">Method:</span>
               <span className="font-medium">{returnPolicy.return_method}</span>
             </div>
           )}
@@ -536,29 +724,26 @@ const ProductDetailPage = () => {
     );
   }, []);
 
-  // Enhanced breadcrumbs with category support
+  // Format breadcrumbs
   const formatBreadcrumbs = useCallback((product) => {
-    const breadcrumbs = [
-      { name: "Home", path: "/" },
-      { name: "Search", path: "/search" },
-    ];
+    const breadcrumbs = [{ name: "Home", path: "/" }];
 
-    // Add category breadcrumbs for AliExpress
-    if (product.categories) {
-      if (product.categories.first_level) {
+    if (product?.categories) {
+      // Handle categories if available
+      Object.entries(product.categories).forEach(([level, category]) => {
+        if (category && category !== "N/A") {
+          breadcrumbs.push({ name: category, path: null });
+        }
+      });
+    } else {
+      // Fallback breadcrumbs
+      breadcrumbs.push({ name: "Products", path: "/search" });
+      if (product?.marketplace) {
         breadcrumbs.push({
-          name: product.categories.first_level,
-          path: `/search?category=${encodeURIComponent(
-            product.categories.first_level
-          )}`,
-        });
-      }
-      if (product.categories.second_level) {
-        breadcrumbs.push({
-          name: product.categories.second_level,
-          path: `/search?category=${encodeURIComponent(
-            product.categories.second_level
-          )}`,
+          name:
+            product.marketplace.charAt(0).toUpperCase() +
+            product.marketplace.slice(1),
+          path: null,
         });
       }
     }
@@ -571,7 +756,7 @@ const ProductDetailPage = () => {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mb-4 mx-auto"></div>
           <p className="text-gray-600">Loading product details...</p>
         </div>
       </div>
@@ -582,31 +767,31 @@ const ProductDetailPage = () => {
   if (error) {
     return (
       <div className="text-center py-12">
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6 max-w-md mx-auto">
-          <h2 className="text-lg font-semibold mb-2">Error Loading Product</h2>
-          <p className="mb-4">{error}</p>
+        <p className="text-xl font-medium mb-4">Oops! Something went wrong</p>
+        <p className="text-gray-600 mb-6">{error}</p>
+        <div className="space-x-4">
           <button
             onClick={handleRetry}
-            className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 mr-2"
+            className="bg-primary text-white px-4 py-2 rounded hover:bg-blue-700"
           >
             Try Again
           </button>
           <Link
-            to="/search"
-            className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+            to="/"
+            className="bg-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-400"
           >
-            Back to Search
+            Back to Home
           </Link>
         </div>
       </div>
     );
   }
 
-  // Product not found state
+  // No product found
   if (!product) {
     return (
       <div className="text-center py-12">
-        <h2 className="text-2xl font-bold mb-4">Product Not Found</h2>
+        <p className="text-xl font-medium mb-4">Product not found</p>
         <p className="text-gray-600 mb-6">
           The product you're looking for doesn't exist or has been removed.
         </p>
@@ -689,127 +874,108 @@ const ProductDetailPage = () => {
                 </span>
               )}
 
-              {product.brand && (
-                <span className="text-sm text-gray-600">
-                  <strong>Brand:</strong> {product.brand}
-                </span>
-              )}
-
-              {/* Discount Badge for AliExpress */}
-              {product.discount_percentage > 0 && (
-                <span className="bg-red-100 text-red-800 px-2 py-1 rounded text-sm font-medium">
-                  {product.discount_percentage}% OFF
+              {product.top_rated_seller && (
+                <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+                  Top Rated
                 </span>
               )}
             </div>
-          </div>
-
-          {/* Rating and Sales */}
-          <div className="flex items-center mb-4">
-            {product.rating && (
-              <div className="flex items-center mr-4">
-                <div className="flex text-yellow-400 mr-1">
-                  {[...Array(5)].map((_, i) => (
-                    <svg
-                      key={i}
-                      className={`w-5 h-5 ${
-                        i < Math.floor(product.rating)
-                          ? "text-yellow-400"
-                          : "text-gray-300"
-                      }`}
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-                    </svg>
-                  ))}
-                </div>
-                <span className="text-gray-700">
-                  {product.rating.toFixed(1)}
-                </span>
-              </div>
-            )}
-
-            {product.sold_count && (
-              <div className="text-gray-600 text-sm">
-                {product.sold_count.toLocaleString()} sold
-              </div>
-            )}
-
-            {product.top_rated_seller && (
-              <div className="ml-4">
-                <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-1 rounded">
-                  Top Rated Seller
-                </span>
-              </div>
-            )}
           </div>
 
           {/* Price Information */}
-          <div className="bg-gray-50 p-4 rounded-lg mb-6">
-            <div className="flex items-center mb-2">
-              <span className="text-3xl font-bold text-primary mr-3">
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+            <div className="flex items-baseline gap-3 mb-2">
+              <span className="text-3xl font-bold text-green-600">
                 {formatPrice(product.sale_price)}
               </span>
 
-              {product.original_price > product.sale_price && (
-                <>
-                  <span className="text-lg text-gray-500 line-through mr-2">
-                    {formatPrice(product.original_price)}
-                  </span>
-                  <span className="bg-secondary text-white text-sm font-bold px-2 py-1 rounded">
-                    {calculateDiscount(
-                      product.original_price,
-                      product.sale_price
-                    )}
-                    % OFF
-                  </span>
-                </>
-              )}
-            </div>
-
-            {/* Additional product attributes */}
-            <div className="text-sm text-gray-600 space-y-1">
-              {product.color && (
-                <div>
-                  <strong>Color:</strong> {product.color}
-                </div>
-              )}
-              {product.material && (
-                <div>
-                  <strong>Material:</strong> {product.material}
-                </div>
-              )}
+              {product.original_price &&
+                product.original_price !== product.sale_price && (
+                  <>
+                    <span className="text-xl text-gray-500 line-through">
+                      {formatPrice(product.original_price)}
+                    </span>
+                    <span className="bg-red-100 text-red-800 px-2 py-1 rounded text-sm font-medium">
+                      {calculateDiscount(
+                        product.original_price,
+                        product.sale_price
+                      )}
+                      % OFF
+                    </span>
+                  </>
+                )}
             </div>
           </div>
 
+          {/* Wishlist Message Display */}
+          {wishlistMessage && (
+            <div
+              className={`mb-4 p-3 rounded-lg border ${
+                wishlistMessage.type === "success"
+                  ? "bg-green-50 border-green-200 text-green-800"
+                  : "bg-red-50 border-red-200 text-red-800"
+              }`}
+            >
+              <div className="flex items-center">
+                <span className="mr-2">
+                  {wishlistMessage.type === "success" ? "✅" : "❌"}
+                </span>
+                {wishlistMessage.text}
+              </div>
+            </div>
+          )}
+
           {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row gap-3 mb-6">
+          <div className="mb-6 space-y-3">
             <a
-              href={product.affiliate_link || product.url}
+              href={product.affiliate_link}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-1 bg-primary text-white py-3 px-4 rounded text-center font-medium hover:bg-blue-700 transition-colors"
+              className="w-full bg-primary text-white py-3 px-4 rounded text-center font-medium hover:bg-blue-700 transition-colors block"
             >
-              View Deal on{" "}
+              View on{" "}
               {product.marketplace.charAt(0).toUpperCase() +
                 product.marketplace.slice(1)}
             </a>
-            <button className="flex-1 border border-primary text-primary py-3 px-4 rounded text-center font-medium hover:bg-primary hover:text-white transition-colors">
-              Add to Wishlist
+
+            {/* Enhanced Wishlist Button */}
+            <button
+              onClick={handleAddToWishlist}
+              disabled={isAddingToWishlist || isInWishlist}
+              className={`w-full py-3 px-4 rounded text-center font-medium transition-colors ${
+                isInWishlist
+                  ? "bg-green-50 border border-green-200 text-green-800 cursor-not-allowed"
+                  : isAddingToWishlist
+                  ? "bg-gray-100 border border-gray-300 text-gray-500 cursor-not-allowed"
+                  : "border border-primary text-primary hover:bg-primary hover:text-white"
+              }`}
+            >
+              {isAddingToWishlist ? (
+                <div className="flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-primary mr-2"></div>
+                  Adding to Wishlist...
+                </div>
+              ) : isInWishlist ? (
+                <div className="flex items-center justify-center">
+                  <span className="mr-2">✓</span>
+                  Already in Wishlist
+                </div>
+              ) : (
+                <div className="flex items-center justify-center">
+                  <span className="mr-2">♡</span>
+                  {isAuthenticated
+                    ? "Add to Wishlist"
+                    : "Add to Wishlist (Login Required)"}
+                </div>
+              )}
             </button>
           </div>
 
-          {/* Description */}
-          {product.description && (
-            <div className="mb-6">
-              <h2 className="text-lg font-semibold mb-2">Description</h2>
-              <div
-                className="text-gray-700 prose prose-sm max-w-none"
-                dangerouslySetInnerHTML={{ __html: product.description }}
-              />
-            </div>
-          )}
+          {/* ENHANCED Description with better handling */}
+          <ProductDescription
+            description={product.description}
+            title={product.title}
+          />
         </div>
 
         {/* Additional Info - Right Column */}
@@ -843,7 +1009,7 @@ const ProductDetailPage = () => {
                           {key}
                         </div>
                         <div className="w-2/3 text-sm text-gray-600">
-                          {value}
+                          {formatSpecificationValue(value)}
                         </div>
                       </div>
                     )

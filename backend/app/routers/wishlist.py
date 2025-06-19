@@ -102,23 +102,98 @@ async def remove_from_wishlist(
     item_id: str, current_user: User = Depends(get_current_active_user)
 ) -> Any:
     """Remove item from wishlist."""
-    # Convert string IDs to ObjectIds for MongoDB
-    print(f"Current user ID: {current_user.id}")
-    print(f"Current item ID: {item_id}")
+    print(f"\n=== REMOVE DEBUG ===")
+    print(f"🔍 Current user ID: {current_user.id} (type: {type(current_user.id)})")
+    print(f"🔍 Item ID to remove: '{item_id}'")
     
-    # Find item to ensure it belongs to the user
-    item = await wishlist_collection.find_one({
-        "product_id": item_id, 
-        "user_id": current_user.id
-    })
-    
-    if not item:
+    # Validate item_id format for MongoDB ObjectId
+    try:
+        object_id = ObjectId(item_id)
+        print(f"✅ Successfully converted to ObjectId: {object_id}")
+    except Exception as e:
+        print(f"❌ Failed to convert '{item_id}' to ObjectId: {e}")
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Wishlist item not found"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid item ID format: {item_id}"
         )
     
-    # Delete from wishlist
-    await wishlist_collection.delete_one({"product_id": item_id})
+    # FIXED: Handle both string and ObjectId user IDs
+    # Try to convert user ID to ObjectId if it's a string
+    user_id_for_query = current_user.id
+    if isinstance(current_user.id, str):
+        try:
+            user_id_for_query = ObjectId(current_user.id)
+            print(f"🔄 Converted user ID to ObjectId: {user_id_for_query}")
+        except:
+            print(f"⚠️ User ID is string but not valid ObjectId, using as-is: {current_user.id}")
+            user_id_for_query = current_user.id
     
-    return {"message": "Item removed from wishlist"}
+    # Let's first check what items exist for this user with both ID formats
+    print(f"🔍 Searching for user items...")
+    
+    # Try with ObjectId user_id first
+    user_items_obj = await wishlist_collection.find({"user_id": user_id_for_query}).to_list(length=10)
+    print(f"📊 Found {len(user_items_obj)} items with ObjectId user_id")
+    
+    # Try with string user_id as fallback
+    user_items_str = await wishlist_collection.find({"user_id": current_user.id}).to_list(length=10)
+    print(f"📊 Found {len(user_items_str)} items with string user_id")
+    
+    # Try both queries to find the item
+    item = None
+    
+    # First try: ObjectId user_id
+    if user_items_obj:
+        item = await wishlist_collection.find_one({
+            "_id": object_id, 
+            "user_id": user_id_for_query
+        })
+        if item:
+            print(f"✅ Found item using ObjectId user_id")
+    
+    # Second try: string user_id (fallback)
+    if not item and user_items_str:
+        item = await wishlist_collection.find_one({
+            "_id": object_id, 
+            "user_id": current_user.id
+        })
+        if item:
+            print(f"✅ Found item using string user_id")
+            user_id_for_query = current_user.id  # Use string for deletion
+    
+    if not item:
+        print(f"❌ Item not found with _id={object_id}")
+        
+        # Let's see what's actually in the database
+        any_item = await wishlist_collection.find_one({"_id": object_id})
+        if any_item:
+            print(f"⚠️ Item exists but belongs to user: {any_item.get('user_id')} (type: {type(any_item.get('user_id'))})")
+        else:
+            print(f"⚠️ Item with _id={object_id} doesn't exist in database at all")
+            
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Wishlist item not found with ID: {item_id}"
+        )
+    
+    print(f"✅ Found item to remove: {item.get('title', 'Unknown title')}")
+    
+    # Delete from wishlist using the correct user_id format
+    delete_result = await wishlist_collection.delete_one({
+        "_id": object_id,
+        "user_id": user_id_for_query  # Use the format that worked for finding
+    })
+    
+    print(f"🔍 Delete result: acknowledged={delete_result.acknowledged}, deleted_count={delete_result.deleted_count}")
+    
+    if delete_result.deleted_count == 0:
+        print(f"❌ No items were deleted")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Item not found or already removed"
+        )
+    
+    print(f"✅ Successfully removed item")
+    print("=== REMOVE DEBUG END ===\n")
+    
+    return {"message": "Item removed from wishlist successfully"}
