@@ -1,6 +1,283 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
 import { productService } from "../api/apiServices";
+
+// =====================================================
+// ENHANCED IMAGE LOADING COMPONENTS AND HOOKS
+// =====================================================
+
+// Custom hook for handling AliExpress image loading with retry logic
+const useAliExpressImage = (originalSrc, fallbackSrc) => {
+  const [imageSrc, setImageSrc] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    if (!originalSrc) {
+      setIsLoading(false);
+      setHasError(true);
+      return;
+    }
+
+    setIsLoading(true);
+    setHasError(false);
+
+    // Try to load the image with various fixes for AliExpress
+    const tryLoadImage = async () => {
+      const imagesToTry = [
+        originalSrc,
+        // Remove query parameters that might cause issues
+        originalSrc.split("?")[0],
+        // Try different size variants (AliExpress specific)
+        originalSrc.replace("_50x50.jpg", "_350x350.jpg"),
+        originalSrc.replace("_100x100.jpg", "_350x350.jpg"),
+        originalSrc.replace("_200x200.jpg", "_350x350.jpg"),
+        // Try HTTPS if HTTP
+        originalSrc.replace("http://", "https://"),
+        fallbackSrc,
+      ].filter(Boolean); // Remove any null/undefined values
+
+      for (const src of imagesToTry) {
+        try {
+          const success = await loadImage(src);
+          if (success) {
+            setImageSrc(src);
+            setIsLoading(false);
+            return;
+          }
+        } catch (error) {
+          console.log(`Failed to load image: ${src}`);
+        }
+      }
+
+      // If all attempts failed
+      setHasError(true);
+      setIsLoading(false);
+    };
+
+    tryLoadImage();
+  }, [originalSrc, fallbackSrc]);
+
+  return { imageSrc, isLoading, hasError };
+};
+
+// Helper function to load an image and return a promise
+const loadImage = (src) => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+
+    // Set crossOrigin to try to avoid CORS issues
+    img.crossOrigin = "anonymous";
+
+    img.onload = () => resolve(true);
+    img.onerror = () => reject(false);
+
+    // Add timestamp to bypass cache if needed
+    img.src = src.includes("?")
+      ? `${src}&t=${Date.now()}`
+      : `${src}?t=${Date.now()}`;
+
+    // Timeout after 10 seconds
+    setTimeout(() => reject(false), 10000);
+  });
+};
+
+// Enhanced Image Component for Product Details
+const ProductImage = ({
+  src,
+  alt,
+  className = "",
+  fallbackSrc = "https://via.placeholder.com/400x300?text=Image+Not+Available",
+  showLoader = true,
+}) => {
+  const { imageSrc, isLoading, hasError } = useAliExpressImage(
+    src,
+    fallbackSrc
+  );
+
+  if (isLoading && showLoader) {
+    return (
+      <div
+        className={`${className} flex items-center justify-center bg-gray-100`}
+      >
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mb-2 mx-auto"></div>
+          <span className="text-sm text-gray-500">Loading image...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (hasError || !imageSrc) {
+    return (
+      <div
+        className={`${className} flex items-center justify-center bg-gray-100`}
+      >
+        <div className="text-center text-gray-500">
+          <div className="text-2xl mb-2">📷</div>
+          <span className="text-sm">Image unavailable</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={imageSrc}
+      alt={alt}
+      className={className}
+      loading="lazy"
+      onError={(e) => {
+        // Last resort fallback
+        e.target.src = fallbackSrc;
+      }}
+    />
+  );
+};
+
+// Enhanced Product Image Section Component
+const ProductImageSection = ({
+  product,
+  activeImage,
+  setActiveImage,
+  showVideo,
+  setShowVideo,
+}) => {
+  // Memoize image processing to avoid recalculating on every render
+  const processedImages = useMemo(() => {
+    const images = [];
+
+    // Add main image first
+    if (product.main_image) {
+      images.push(product.main_image);
+    }
+
+    // Add additional images, avoiding duplicates
+    if (product.images && Array.isArray(product.images)) {
+      product.images.forEach((img) => {
+        if (img && !images.includes(img)) {
+          images.push(img);
+        }
+      });
+    }
+
+    return images;
+  }, [product.main_image, product.images]);
+
+  // Handle thumbnail click with bounds checking
+  const handleThumbnailClick = useCallback(
+    (index) => {
+      if (index >= 0 && index < processedImages.length) {
+        setActiveImage(index);
+      }
+    },
+    [processedImages.length, setActiveImage]
+  );
+
+  return (
+    <div className="lg:col-span-1">
+      {/* Video/Image Toggle for AliExpress */}
+      {product.product_video_url && (
+        <div className="mb-4 flex gap-2">
+          <button
+            onClick={() => setShowVideo(false)}
+            className={`px-3 py-1 rounded text-sm transition-colors ${
+              !showVideo
+                ? "bg-primary text-white"
+                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+            }`}
+          >
+            Images ({processedImages.length})
+          </button>
+          <button
+            onClick={() => setShowVideo(true)}
+            className={`px-3 py-1 rounded text-sm transition-colors ${
+              showVideo
+                ? "bg-primary text-white"
+                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+            }`}
+          >
+            Video
+          </button>
+        </div>
+      )}
+
+      {/* Main Image/Video Display */}
+      <div className="mb-4 border rounded-lg overflow-hidden bg-white">
+        {showVideo && product.product_video_url ? (
+          <video
+            controls
+            className="w-full h-auto max-h-96"
+            poster={processedImages[0]}
+            onError={(e) => {
+              console.log("Video failed to load, switching to images");
+              setShowVideo(false);
+            }}
+          >
+            <source src={product.product_video_url} type="video/mp4" />
+            Your browser does not support the video tag.
+          </video>
+        ) : (
+          <ProductImage
+            src={processedImages[activeImage] || processedImages[0]}
+            alt={`${product.title} - Main image`}
+            className="w-full h-auto max-h-96 object-contain p-4"
+          />
+        )}
+      </div>
+
+      {/* Thumbnail Images */}
+      {!showVideo && processedImages.length > 1 && (
+        <div className="space-y-2">
+          <div className="text-sm text-gray-600 font-medium">
+            All Images ({processedImages.length})
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            {processedImages.slice(0, 8).map((image, index) => (
+              <div
+                key={`${image}-${index}`} // Better key for React reconciliation
+                className={`
+                  border rounded cursor-pointer transition-all duration-200 relative
+                  ${
+                    index === activeImage
+                      ? "border-primary ring-2 ring-primary/50 shadow-md"
+                      : "border-gray-200 hover:border-gray-300 hover:shadow-sm"
+                  }
+                `}
+                onClick={() => handleThumbnailClick(index)}
+              >
+                <ProductImage
+                  src={image}
+                  alt={`${product.title} - Thumbnail ${index + 1}`}
+                  className="w-full aspect-square object-cover"
+                  showLoader={false}
+                />
+
+                {/* Active indicator */}
+                {index === activeImage && (
+                  <div className="absolute top-1 right-1 bg-primary text-white text-xs px-1 py-0.5 rounded">
+                    ✓
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Show more images indicator */}
+          {processedImages.length > 8 && (
+            <div className="text-sm text-gray-500 text-center">
+              +{processedImages.length - 8} more images
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// =====================================================
+// MAIN PRODUCT DETAIL PAGE COMPONENT
+// =====================================================
 
 const ProductDetailPage = () => {
   const { marketplace, id } = useParams();
@@ -11,59 +288,106 @@ const ProductDetailPage = () => {
   const [activeImage, setActiveImage] = useState(0);
   const [showVideo, setShowVideo] = useState(false);
 
+  // Reset active image when product changes
   useEffect(() => {
-    const fetchProductDetail = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
+    if (product) {
+      setActiveImage(0);
+      setShowVideo(false);
+    }
+  }, [product]);
 
-        console.log(`Fetching product details for ${marketplace}/${id}`);
+  // FIXED: Proper fetchProductDetail with retry capability
+  const fetchProductDetail = useCallback(async () => {
+    if (!marketplace || !id) return;
 
-        const productData = await productService.getProductDetails(
-          marketplace,
-          id
-        );
-        console.log("Product data received:", productData);
+    try {
+      setIsLoading(true);
+      setError(null);
 
-        setProduct(productData);
-        setActiveImage(0);
-        setShowVideo(false);
-      } catch (err) {
-        console.error("Error fetching product details:", err);
-        setError(err.message || "Failed to load product details");
-        setProduct(null);
-      } finally {
-        setIsLoading(false);
+      console.log(`Fetching product details for ${marketplace}/${id}`);
+
+      const productData = await productService.getProductDetails(
+        marketplace,
+        id
+      );
+      console.log("Product data received:", productData);
+
+      setProduct(productData);
+    } catch (err) {
+      console.error("Error fetching product details:", err);
+
+      // Better error message handling
+      let errorMessage = "Failed to load product details";
+      if (err.message.includes("404") || err.message.includes("not found")) {
+        errorMessage = "Product not found";
+      } else if (
+        err.message.includes("network") ||
+        err.message.includes("fetch")
+      ) {
+        errorMessage = "Network error. Please check your connection";
+      } else if (err.message) {
+        errorMessage = err.message;
       }
-    };
 
-    if (marketplace && id) {
-      fetchProductDetail();
+      setError(errorMessage);
+      setProduct(null);
+    } finally {
+      setIsLoading(false);
     }
   }, [marketplace, id]);
 
+  useEffect(() => {
+    if (marketplace && id) {
+      fetchProductDetail();
+    }
+  }, [fetchProductDetail]);
+
+  // FIXED: Retry function that actually works
+  const handleRetry = useCallback(() => {
+    fetchProductDetail();
+  }, [fetchProductDetail]);
+
   // Format price with currency
-  const formatPrice = (price) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(price);
-  };
+  const formatPrice = useCallback((price) => {
+    try {
+      const numPrice = typeof price === "string" ? parseFloat(price) : price;
+      if (isNaN(numPrice)) return "$0.00";
+
+      return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+      }).format(numPrice);
+    } catch (error) {
+      console.error("Error formatting price:", error);
+      return "$0.00";
+    }
+  }, []);
 
   // Calculate discount percentage
-  const calculateDiscount = (original, sale) => {
-    if (original <= 0 || sale >= original) return 0;
-    return Math.round(((original - sale) / original) * 100);
-  };
+  const calculateDiscount = useCallback((original, sale) => {
+    try {
+      const origNum =
+        typeof original === "string" ? parseFloat(original) : original;
+      const saleNum = typeof sale === "string" ? parseFloat(sale) : sale;
 
-  // Handle retry when error occurs
-  const handleRetry = () => {
-    setError(null);
-    setIsLoading(true);
-  };
+      if (
+        isNaN(origNum) ||
+        isNaN(saleNum) ||
+        origNum <= 0 ||
+        saleNum >= origNum
+      ) {
+        return 0;
+      }
+
+      return Math.round(((origNum - saleNum) / origNum) * 100);
+    } catch (error) {
+      console.error("Error calculating discount:", error);
+      return 0;
+    }
+  }, []);
 
   // Format seller/shop information for both eBay and AliExpress
-  const formatSellerInfo = (seller, marketplace) => {
+  const formatSellerInfo = useCallback((seller, marketplace) => {
     if (!seller) return null;
 
     const isEbay = marketplace === "ebay";
@@ -98,7 +422,7 @@ const ProductDetailPage = () => {
             <div className="flex justify-between">
               <span className="text-gray-600">Rating:</span>
               <span className="font-medium">
-                {seller.feedback_score.toLocaleString()} reviews
+                {Number(seller.feedback_score).toLocaleString()} reviews
               </span>
             </div>
           )}
@@ -128,52 +452,55 @@ const ProductDetailPage = () => {
         </div>
       </div>
     );
-  };
+  }, []);
 
   // Format shipping information
-  const formatShippingInfo = (shipping, location) => {
-    if (!shipping && !location) return null;
+  const formatShippingInfo = useCallback(
+    (shipping, location) => {
+      if (!shipping && !location) return null;
 
-    return (
-      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-        <h3 className="font-semibold text-green-800 mb-2">
-          Shipping & Location
-        </h3>
+      return (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <h3 className="font-semibold text-green-800 mb-2">
+            Shipping & Location
+          </h3>
 
-        {location && (
-          <div className="mb-3">
-            <span className="text-sm text-gray-600">Ships from: </span>
-            <span className="text-sm font-medium">
-              {[location.city, location.state, location.country]
-                .filter(Boolean)
-                .join(", ")}
-            </span>
-          </div>
-        )}
+          {location && (
+            <div className="mb-3">
+              <span className="text-sm text-gray-600">Ships from: </span>
+              <span className="text-sm font-medium">
+                {[location.city, location.state, location.country]
+                  .filter(Boolean)
+                  .join(", ")}
+              </span>
+            </div>
+          )}
 
-        {shipping && shipping.length > 0 && (
-          <div className="space-y-2">
-            <span className="text-sm font-medium text-gray-700">
-              Shipping Options:
-            </span>
-            {shipping.slice(0, 3).map((option, index) => (
-              <div key={index} className="flex justify-between text-sm">
-                <span className="text-gray-600">
-                  {option.service || "Standard"}:
-                </span>
-                <span className="font-medium">
-                  {option.cost > 0 ? formatPrice(option.cost) : "Free"}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
+          {shipping && shipping.length > 0 && (
+            <div className="space-y-2">
+              <span className="text-sm font-medium text-gray-700">
+                Shipping Options:
+              </span>
+              {shipping.slice(0, 3).map((option, index) => (
+                <div key={index} className="flex justify-between text-sm">
+                  <span className="text-gray-600">
+                    {option.service || "Standard"}:
+                  </span>
+                  <span className="font-medium">
+                    {option.cost > 0 ? formatPrice(option.cost) : "Free"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    },
+    [formatPrice]
+  );
 
   // Format return policy
-  const formatReturnPolicy = (returnPolicy) => {
+  const formatReturnPolicy = useCallback((returnPolicy) => {
     if (!returnPolicy) return null;
 
     return (
@@ -207,10 +534,10 @@ const ProductDetailPage = () => {
         </div>
       </div>
     );
-  };
+  }, []);
 
   // Enhanced breadcrumbs with category support
-  const formatBreadcrumbs = (product) => {
+  const formatBreadcrumbs = useCallback((product) => {
     const breadcrumbs = [
       { name: "Home", path: "/" },
       { name: "Search", path: "/search" },
@@ -237,7 +564,7 @@ const ProductDetailPage = () => {
     }
 
     return breadcrumbs;
-  };
+  }, []);
 
   // Loading state
   if (isLoading) {
@@ -260,14 +587,17 @@ const ProductDetailPage = () => {
           <p className="mb-4">{error}</p>
           <button
             onClick={handleRetry}
-            className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+            className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 mr-2"
           >
             Try Again
           </button>
+          <Link
+            to="/search"
+            className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+          >
+            Back to Search
+          </Link>
         </div>
-        <Link to="/search" className="text-primary hover:underline">
-          ← Back to Search
-        </Link>
       </div>
     );
   }
@@ -325,89 +655,14 @@ const ProductDetailPage = () => {
 
       {/* Product Content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Product Images & Video - Left Column */}
-        <div className="lg:col-span-1">
-          {/* Video/Image Toggle for AliExpress */}
-          {product.product_video_url && (
-            <div className="mb-4 flex gap-2">
-              <button
-                onClick={() => setShowVideo(false)}
-                className={`px-3 py-1 rounded text-sm ${
-                  !showVideo
-                    ? "bg-primary text-white"
-                    : "bg-gray-200 text-gray-700"
-                }`}
-              >
-                Images
-              </button>
-              <button
-                onClick={() => setShowVideo(true)}
-                className={`px-3 py-1 rounded text-sm ${
-                  showVideo
-                    ? "bg-primary text-white"
-                    : "bg-gray-200 text-gray-700"
-                }`}
-              >
-                Video
-              </button>
-            </div>
-          )}
-
-          {/* Main Image/Video Display */}
-          <div className="mb-4 border rounded-lg overflow-hidden bg-white">
-            {showVideo && product.product_video_url ? (
-              <video
-                controls
-                className="w-full h-auto max-h-96"
-                poster={product.main_image}
-              >
-                <source src={product.product_video_url} type="video/mp4" />
-                Your browser does not support the video tag.
-              </video>
-            ) : (
-              <img
-                src={
-                  product.images && product.images.length > 0
-                    ? product.images[activeImage]
-                    : product.main_image || product.image
-                }
-                alt={product.title}
-                className="w-full h-auto max-h-96 object-contain p-4"
-                onError={(e) => {
-                  e.target.src =
-                    "https://via.placeholder.com/400x300?text=Image+Not+Available";
-                }}
-              />
-            )}
-          </div>
-
-          {/* Thumbnail Images */}
-          {!showVideo && product.images && product.images.length > 1 && (
-            <div className="grid grid-cols-4 gap-2">
-              {product.images.slice(0, 8).map((image, index) => (
-                <div
-                  key={index}
-                  className={`border rounded cursor-pointer ${
-                    index === activeImage
-                      ? "border-primary ring-2 ring-primary/50"
-                      : "border-gray-200 hover:border-gray-300"
-                  }`}
-                  onClick={() => setActiveImage(index)}
-                >
-                  <img
-                    src={image}
-                    alt={`Thumbnail ${index + 1}`}
-                    className="w-full aspect-square object-cover"
-                    onError={(e) => {
-                      e.target.src =
-                        "https://via.placeholder.com/100x100?text=No+Image";
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        {/* ENHANCED Product Images & Video - Left Column */}
+        <ProductImageSection
+          product={product}
+          activeImage={activeImage}
+          setActiveImage={setActiveImage}
+          showVideo={showVideo}
+          setShowVideo={setShowVideo}
+        />
 
         {/* Product Info - Middle Column */}
         <div className="lg:col-span-1">
