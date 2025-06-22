@@ -1,4 +1,5 @@
-"""Wishlist router."""
+"""Wishlist router with fixed user ID consistency."""
+from datetime import datetime
 from typing import Any, List
 
 from bson import ObjectId
@@ -13,12 +14,11 @@ router = APIRouter(prefix="/wishlist", tags=["Wishlist"])
 @router.get("/", response_model=List[WishlistItemOut])
 async def get_wishlist(current_user: User = Depends(get_current_active_user)) -> Any:
     """Get user's wishlist items."""
-    # Find all wishlist items for the user
+    # CONSISTENT: Always use string user_id for queries
+    # Since current_user.id is always a string from JWT auth
     wishlist_cursor = wishlist_collection.find({"user_id": current_user.id})
-    # Convert to list and return
-    wishlist_items = await wishlist_cursor.to_list(length=100)  # Limit to 100 items
+    wishlist_items = await wishlist_cursor.to_list(length=100)
 
-    # Convert ObjectIds to strings for response
     return [
         WishlistItemOut(
             id=str(item["_id"]),
@@ -40,11 +40,11 @@ async def add_to_wishlist(
     product_data: dict, current_user: User = Depends(get_current_active_user)
 ) -> Any:
     """Add item to wishlist."""
-    # Convert string ID to ObjectId for MongoDB
     
     # Check if product already exists in wishlist
+    # CONSISTENT: Use string user_id for all operations
     existing_item = await wishlist_collection.find_one({
-        "user_id": current_user.id, 
+        "user_id": current_user.id,  # Keep as string
         "product_id": product_data["product_id"],
         "marketplace": product_data["marketplace"]
     })
@@ -64,21 +64,23 @@ async def add_to_wishlist(
             added_at=existing_item["added_at"]
         )
     
-    # Create wishlist item
-    wishlist_item = WishlistItem(
-        user_id=current_user.id,
-        product_id=product_data["product_id"],
-        marketplace=product_data["marketplace"],
-        title=product_data["title"],
-        original_price=product_data["original_price"],
-        sale_price=product_data["sale_price"],
-        image=product_data["image"],
-        detail_url=product_data["detail_url"],
-        affiliate_link=product_data["affiliate_link"]
-    )
+    # Create wishlist item document directly (bypass Pydantic model validation)
+    # This ensures user_id stays as string and doesn't get converted to ObjectId
+    wishlist_item_dict = {
+        "user_id": current_user.id,  # Keep as string - this is the KEY fix!
+        "product_id": product_data["product_id"],
+        "marketplace": product_data["marketplace"],
+        "title": product_data["title"],
+        "original_price": product_data["original_price"],
+        "sale_price": product_data["sale_price"],
+        "image": product_data["image"],
+        "detail_url": product_data["detail_url"],
+        "affiliate_link": product_data["affiliate_link"],
+        "added_at": datetime.utcnow()
+    }
     
     # Insert into database
-    result = await wishlist_collection.insert_one(wishlist_item.dict(by_alias=True))
+    result = await wishlist_collection.insert_one(wishlist_item_dict)
     
     # Get newly created item
     created_item = await wishlist_collection.find_one({"_id": result.inserted_id})
@@ -102,6 +104,7 @@ async def remove_from_wishlist(
     item_id: str, current_user: User = Depends(get_current_active_user)
 ) -> Any:
     """Remove item from wishlist."""
+    
     print(f"\n=== REMOVE DEBUG ===")
     print(f"🔍 Current user ID: {current_user.id} (type: {type(current_user.id)})")
     print(f"🔍 Item ID to remove: '{item_id}'")
@@ -117,57 +120,24 @@ async def remove_from_wishlist(
             detail=f"Invalid item ID format: {item_id}"
         )
     
-    # FIXED: Handle both string and ObjectId user IDs
-    # Try to convert user ID to ObjectId if it's a string
-    user_id_for_query = current_user.id
-    if isinstance(current_user.id, str):
-        try:
-            user_id_for_query = ObjectId(current_user.id)
-            print(f"🔄 Converted user ID to ObjectId: {user_id_for_query}")
-        except:
-            print(f"⚠️ User ID is string but not valid ObjectId, using as-is: {current_user.id}")
-            user_id_for_query = current_user.id
+    # SIMPLIFIED: Since we're now consistently using string user_id,
+    # we only need to query with string format
+    print(f"🔍 Searching for item with user_id (string): {current_user.id}")
     
-    # Let's first check what items exist for this user with both ID formats
-    print(f"🔍 Searching for user items...")
-    
-    # Try with ObjectId user_id first
-    user_items_obj = await wishlist_collection.find({"user_id": user_id_for_query}).to_list(length=10)
-    print(f"📊 Found {len(user_items_obj)} items with ObjectId user_id")
-    
-    # Try with string user_id as fallback
-    user_items_str = await wishlist_collection.find({"user_id": current_user.id}).to_list(length=10)
-    print(f"📊 Found {len(user_items_str)} items with string user_id")
-    
-    # Try both queries to find the item
-    item = None
-    
-    # First try: ObjectId user_id
-    if user_items_obj:
-        item = await wishlist_collection.find_one({
-            "_id": object_id, 
-            "user_id": user_id_for_query
-        })
-        if item:
-            print(f"✅ Found item using ObjectId user_id")
-    
-    # Second try: string user_id (fallback)
-    if not item and user_items_str:
-        item = await wishlist_collection.find_one({
-            "_id": object_id, 
-            "user_id": current_user.id
-        })
-        if item:
-            print(f"✅ Found item using string user_id")
-            user_id_for_query = current_user.id  # Use string for deletion
+    # Find the item to remove
+    item = await wishlist_collection.find_one({
+        "_id": object_id,
+        "user_id": current_user.id  # Always use string user_id
+    })
     
     if not item:
-        print(f"❌ Item not found with _id={object_id}")
+        print(f"❌ Item not found with _id={object_id} and user_id={current_user.id}")
         
-        # Let's see what's actually in the database
+        # Debug: Check if item exists at all
         any_item = await wishlist_collection.find_one({"_id": object_id})
         if any_item:
             print(f"⚠️ Item exists but belongs to user: {any_item.get('user_id')} (type: {type(any_item.get('user_id'))})")
+            print(f"⚠️ Current user: {current_user.id} (type: {type(current_user.id)})")
         else:
             print(f"⚠️ Item with _id={object_id} doesn't exist in database at all")
             
@@ -178,10 +148,10 @@ async def remove_from_wishlist(
     
     print(f"✅ Found item to remove: {item.get('title', 'Unknown title')}")
     
-    # Delete from wishlist using the correct user_id format
+    # Delete from wishlist
     delete_result = await wishlist_collection.delete_one({
         "_id": object_id,
-        "user_id": user_id_for_query  # Use the format that worked for finding
+        "user_id": current_user.id  # Use consistent string user_id
     })
     
     print(f"🔍 Delete result: acknowledged={delete_result.acknowledged}, deleted_count={delete_result.deleted_count}")
