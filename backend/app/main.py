@@ -1,3 +1,4 @@
+# backend/app/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -5,10 +6,8 @@ from contextlib import asynccontextmanager
 
 import logging
 
-from app.routers import search, auth, wishlist
+from app.routers import search, auth, wishlist, google_auth  # Add google_auth import
 from .config import settings
-
-#app = FastAPI(title="DealHunt API")
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -31,7 +30,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="DealHunt app",
-    description="FastAPI application with MongoDB",
+    description="FastAPI application with MongoDB and Google OAuth",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -48,11 +47,12 @@ app.add_middleware(
 # Include routers
 app.include_router(search.router)
 app.include_router(auth.router)
+app.include_router(google_auth.router)  # Add Google auth router
 app.include_router(wishlist.router)
 
 @app.get("/")
 def root():
-    return {"message": "Welcome to DealHunt!"}
+    return {"message": "Welcome to DealHunt with Google OAuth!"}
 
 async def connect_to_mongo():
     """Create database connection."""

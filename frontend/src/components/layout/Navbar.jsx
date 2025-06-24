@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import DealHuntLogo from "../../assets/DEALHUNT_LOGO.png";
@@ -6,8 +6,19 @@ import DealHuntLogo from "../../assets/DEALHUNT_LOGO.png";
 const Navbar = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownTimeoutRef = useRef(null);
   const navigate = useNavigate();
   const { currentUser, logout } = useAuth();
+
+  // Cleanup timeout on component unmount
+  useEffect(() => {
+    return () => {
+      if (dropdownTimeoutRef.current) {
+        clearTimeout(dropdownTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Handle search form submission
   const handleSearch = (e) => {
@@ -22,6 +33,24 @@ const Navbar = () => {
   const handleLogout = () => {
     logout();
     navigate("/login");
+    setIsDropdownOpen(false); // Close dropdown when logging out
+  };
+
+  // Handle dropdown hover with proper timing
+  const handleDropdownMouseEnter = () => {
+    // Clear any existing timeout
+    if (dropdownTimeoutRef.current) {
+      clearTimeout(dropdownTimeoutRef.current);
+      dropdownTimeoutRef.current = null;
+    }
+    setIsDropdownOpen(true);
+  };
+
+  const handleDropdownMouseLeave = () => {
+    // Set a delay before hiding the dropdown
+    dropdownTimeoutRef.current = setTimeout(() => {
+      setIsDropdownOpen(false);
+    }, 150); // 150ms delay - enough time to move mouse to dropdown
   };
 
   return (
@@ -82,13 +111,19 @@ const Navbar = () => {
                 >
                   Wishlist
                 </Link>
-                <div className="relative group">
+                <div 
+                  className="relative"
+                  onMouseEnter={handleDropdownMouseEnter}
+                  onMouseLeave={handleDropdownMouseLeave}
+                >
                   <button className="flex items-center text-primary hover:text-primary-dark focus:outline-none">
                     <span className="mr-1">
                       {currentUser["full_name"].split(" ")[0]}
                     </span>
                     <svg
-                      className="w-4 h-4"
+                      className={`w-4 h-4 transition-transform duration-200 ${
+                        isDropdownOpen ? 'rotate-180' : ''
+                      }`}
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -101,20 +136,23 @@ const Navbar = () => {
                       />
                     </svg>
                   </button>
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10 hidden group-hover:block">
-                    <Link
-                      to="/profile"
-                      className="block px-4 py-2 text-gray-700 hover:bg-gray-100"
-                    >
-                      Profile
-                    </Link>
-                    <button
-                      onClick={handleLogout}
-                      className="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100"
-                    >
-                      Logout
-                    </button>
-                  </div>
+                  {isDropdownOpen && (
+                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10 border border-gray-200">
+                      <Link
+                        to="/profile"
+                        className="block px-4 py-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                        onClick={() => setIsDropdownOpen(false)}
+                      >
+                        Profile
+                      </Link>
+                      <button
+                        onClick={handleLogout}
+                        className="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                      >
+                        Logout
+                      </button>
+                    </div>
+                  )}
                 </div>
               </>
             ) : (

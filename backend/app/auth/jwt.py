@@ -1,4 +1,3 @@
-"""JWT authentication utilities."""
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -17,7 +16,7 @@ async def create_access_token(data: dict, expires_delta: Optional[timedelta] = N
     """Create a new JWT token."""
     to_encode = data.copy()
     
-    expire = datetime.now(timezone.utc) + (  # Use timezone.utc instead of datetime.timezone.utc
+    expire = datetime.now(timezone.utc) + (
         expires_delta if expires_delta 
         else timedelta(minutes=settings.access_token_expire_minutes)
     )
@@ -61,13 +60,16 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
     # Convert to UserInDB model
     user_in_db = UserInDB(**user_dict)
     
-    # Convert to User model (without password hash)
+    # Convert to User model (without password hash) with proper field handling
     user = User(
         id=str(user_in_db.id),
         email=user_in_db.email,
         full_name=user_in_db.full_name,
+        picture_url=user_in_db.picture_url,
+        auth_provider=user_in_db.auth_provider,
         created_at=user_in_db.created_at,
-        is_active=user_in_db.is_active
+        is_active=user_in_db.is_active,
+        last_login=user_in_db.last_login
     )
     
     return user

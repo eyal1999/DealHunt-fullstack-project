@@ -1,4 +1,3 @@
-"""Authentication router."""
 from datetime import timedelta
 from typing import Any
 
@@ -31,15 +30,16 @@ async def register(user_data: UserCreate) -> Any:
     plain_password = user_dict.pop("password")
     hashed_password = get_password_hash(plain_password)
     
-    # Create UserInDB model
+    # Create UserInDB model with email auth provider
     user_db = UserInDB(
         email=user_dict["email"],
         full_name=user_dict["full_name"],
-        hashed_password=hashed_password
+        hashed_password=hashed_password,
+        auth_provider="email"  # Explicitly set for email registration
     )
     
     # Insert user into database
-    result = await users_collection.insert_one(user_db.dict(by_alias=True))
+    result = await users_collection.insert_one(user_db.model_dump(by_alias=True))
     
     # Get newly created user
     created_user = await users_collection.find_one({"_id": result.inserted_id})
@@ -49,13 +49,17 @@ async def register(user_data: UserCreate) -> Any:
         id=str(created_user["_id"]),
         email=created_user["email"],
         full_name=created_user["full_name"],
+        picture_url=created_user.get("picture_url"),
+        auth_provider=created_user.get("auth_provider", "email"),
         created_at=created_user["created_at"],
-        is_active=created_user["is_active"]
+        is_active=created_user["is_active"],
+        last_login=created_user.get("last_login")
     )
 
 @router.post("/login", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends()) -> Any:
     """Authenticate and login a user."""
+    
     # Find user by email
     user = await users_collection.find_one({"email": form_data.username})
     
@@ -68,7 +72,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()) -> Any:
     
     # Verify password
     user_obj = UserInDB(**user)
-    if not verify_password(form_data.password, user_obj.hashed_password):
+    if not user_obj.hashed_password or not verify_password(form_data.password, user_obj.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -81,17 +85,23 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()) -> Any:
         data={"sub": user_obj.email}, expires_delta=access_token_expires
     )
     
+    # Create User response object
+    user_response = User(
+        id=str(user_obj.id),
+        email=user_obj.email,
+        full_name=user_obj.full_name,
+        picture_url=user_obj.picture_url,
+        auth_provider=user_obj.auth_provider,
+        created_at=user_obj.created_at,
+        is_active=user_obj.is_active,
+        last_login=user_obj.last_login
+    )
+    
     # Return token and user info
     return Token(
         access_token=access_token,
         token_type="bearer",
-        user=User(
-            id=str(user_obj.id),
-            email=user_obj.email,
-            full_name=user_obj.full_name,
-            created_at=user_obj.created_at,
-            is_active=user_obj.is_active
-        )
+        user=user_response
     )
 
 @router.get("/me", response_model=User)

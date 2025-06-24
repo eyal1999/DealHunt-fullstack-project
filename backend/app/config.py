@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     secret_key: str = Field("dev_secret_key_change_in_production", validation_alias="SECRET_KEY")
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
+    
+    # ── Google OAuth settings ──────────────────────────────────────
+    google_client_id: str = Field(..., validation_alias="GOOGLE_CLIENT_ID")
+    google_client_secret: str = Field(..., validation_alias="GOOGLE_CLIENT_SECRET")
 
     model_config = SettingsConfigDict(
         env_file=".env",
