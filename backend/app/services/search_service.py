@@ -1,6 +1,10 @@
 """Service layer that talks to the AliExpress Affiliate API (sync)."""
-from typing import List, Iterable
+from typing import List, Iterable, Optional
 import requests
+import re
+from bs4 import BeautifulSoup
+import time
+import urllib.parse
 
 from app.config import settings
 from app.core.utils import timestamp_shanghai, make_signature
@@ -16,6 +20,16 @@ MAX_AFFILIATE_LINKS_PER_CALL = 50  # AliExpress allows up to 50 URLs per affilia
 DEFAULT_MAX_PAGES = 2           # Default pages to fetch (2 × 50 = 100 products)
 AGGRESSIVE_MAX_PAGES = 4        # For when we want more results (4 × 50 = 200 products)
 
+# Web scraping headers to mimic a real browser
+SCRAPING_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.5",
+    "Accept-Encoding": "gzip, deflate",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+}
+
 # ------------------------------------------------------------------ helpers
 def _base_params(method: str) -> dict[str, str]:
     """Set the common AliExpress param block."""
@@ -29,6 +43,95 @@ def _base_params(method: str) -> dict[str, str]:
         "target_currency": settings.target_currency,
         "target_language": settings.target_language,
     }
+
+def _extract_description_from_page(product_url: str) -> Optional[str]:
+    """
+    Fallback function to extract product description by scraping the AliExpress product page.
+    
+    Args:
+        product_url: The AliExpress product page URL
+        
+    Returns:
+        Extracted description text or None if extraction fails
+    """
+    try:
+        print(f"🔍 Attempting to scrape description from: {product_url}")
+        
+        # Add a small delay to be respectful to the server
+        time.sleep(1)
+        
+        response = requests.get(product_url, headers=SCRAPING_HEADERS, timeout=10)
+        response.raise_for_status()
+        
+        soup = BeautifulSoup(response.content, 'html.parser')
+        
+        # Try multiple selectors for different AliExpress page layouts
+        description_selectors = [
+            # Modern AliExpress layout
+            '[data-pl="product-description"]',
+            '.product-description',
+            '.pdp-product-description',
+            '.product-overview',
+            
+            # Older layouts
+            '#j-product-info-sku .sku-property-text',
+            '.product-property-list',
+            '.product-params',
+            
+            # Description sections
+            '.description-content',
+            '.product-detail-desc',
+            '.detail-desc-decorate-richtext',
+            
+            # Fallback to any text content in description areas
+            '[class*="description"]',
+            '[class*="detail"]',
+            '[id*="description"]'
+        ]
+        
+        description_text = ""
+        
+        for selector in description_selectors:
+            elements = soup.select(selector)
+            if elements:
+                # Extract text from all matching elements
+                texts = []
+                for element in elements:
+                    text = element.get_text(strip=True, separator=' ')
+                    if text and len(text) > 20:  # Only meaningful text
+                        texts.append(text)
+                
+                if texts:
+                    description_text = ' '.join(texts)
+                    break
+        
+        # If no specific description found, try to extract from meta tags
+        if not description_text:
+            meta_desc = soup.find('meta', attrs={'name': 'description'})
+            if meta_desc and meta_desc.get('content'):
+                description_text = meta_desc.get('content')
+        
+        # Clean up the description
+        if description_text:
+            # Remove excessive whitespace and normalize
+            description_text = re.sub(r'\s+', ' ', description_text).strip()
+            
+            # Truncate if too long (keep reasonable length)
+            if len(description_text) > 1000:
+                description_text = description_text[:1000] + "..."
+            
+            print(f"✅ Successfully extracted description ({len(description_text)} chars)")
+            return description_text
+        
+        print("⚠️ No description found using any selector")
+        return None
+        
+    except requests.RequestException as e:
+        print(f"❌ Network error while scraping description: {e}")
+        return None
+    except Exception as e:
+        print(f"❌ Error extracting description: {e}")
+        return None
 
 # ---------------------------------------------------------------- affiliate links
 def generate_affiliate_links(
@@ -132,18 +235,13 @@ def generate_affiliate_links_batch(source_urls: List[str]) -> List[PromotionLink
     # Process URLs in batches of 50
     for i in range(0, len(source_urls), batch_size):
         batch = source_urls[i:i + batch_size]
-        print(f"🔗 Generating affiliate links for batch {i//batch_size + 1}: {len(batch)} URLs")
         
         try:
             links = generate_affiliate_links(batch)
             all_links.extend(links)
-            print(f"✅ Generated {len(links)} affiliate links for batch {i//batch_size + 1}")
         except Exception as e:
-            print(f"❌ Failed to generate affiliate links for batch {i//batch_size + 1}: {e}")
             # Continue with other batches even if one fails
             continue
-    
-    print(f"🎉 Total affiliate links generated: {len(all_links)} out of {len(source_urls)} URLs")
     return all_links
 
 # ---------------------------------------------------------------- search
@@ -200,7 +298,9 @@ def search_products(query: str, page_no: int = 1, page_size: int = None) -> List
     for p in products:
         try:
             # FIX: Validate required fields and safe type conversions
-            product_id = str(p.get("product_id", ""))
+            raw_product_id = p.get("product_id", "")
+            product_id = str(raw_product_id).strip()
+            
             if not product_id:
                 continue
                 
@@ -267,22 +367,16 @@ def search_products_multi_page(query: str, max_pages: int = None, page_size: int
     
     for page in range(1, max_pages + 1):
         try:
-            print(f"📄 Fetching page {page} of {max_pages} for query: '{query}'")
             products = search_products(query, page_no=page, page_size=page_size)
             
             if not products:
-                print(f"✅ No more results found on page {page}, stopping pagination")
                 break
                 
             all_products.extend(products)
-            print(f"✅ Page {page}: Found {len(products)} products (Total: {len(all_products)})")
             
         except Exception as e:
-            print(f"❌ Error fetching page {page}: {e}")
             # Continue with other pages even if one fails
             continue
-    
-    print(f"🎉 Multi-page search completed: {len(all_products)} total products found")
     return all_products
 
 # ---------------------------------------------------------------- product detail
@@ -290,48 +384,91 @@ def fetch_product_detail(product_id: str) -> dict:
     """Return a single ProductDetail dict with an affiliate link."""
     if not product_id or not str(product_id).strip():
         raise AliexpressError("Product ID is required")
-        
+    
+    clean_product_id = str(product_id).strip()
+    
     params = _base_params("aliexpress.affiliate.productdetail.get")
     params.update(
         {
-            "product_ids": str(product_id),
+            "product_ids": clean_product_id,
             "tracking_id": settings.tracking_id,
+            "fields": "product_id,product_title,original_price,sale_price,product_detail_url,product_main_image_url,product_small_image_urls,shop_name,shop_url,evaluate_rate,first_level_category_name,second_level_category_name,commission_rate,discount,description,product_video_url,promotion_link",
+            "ship_to_country": "US",
         }
     )
     params["sign"] = make_signature(params, settings.app_secret)
 
-    resp = requests.post(settings.base_url, data=params, headers=_HEADERS, timeout=(15, 30))
-    resp.raise_for_status()
+    try:
+        resp = requests.post(settings.base_url, data=params, headers=_HEADERS, timeout=(15, 30))
+        resp.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        raise AliexpressError(f"Failed to fetch product details: {str(e)}")
 
-    data = (
-        resp.json()
-        .get("aliexpress_affiliate_productdetail_get_response", {})
-        .get("resp_result", {})
-    )
-    if data.get("resp_code") != 200:
-        raise AliexpressError(data.get("resp_msg", "Unknown error"))
+    try:
+        json_response = resp.json()
+        data = (
+            json_response
+            .get("aliexpress_affiliate_productdetail_get_response", {})
+            .get("resp_result", {})
+        )
+        
+        if data.get("resp_code") != 200:
+            raise AliexpressError(data.get("resp_msg", "Unknown error"))
+            
+    except ValueError as e:
+        raise AliexpressError(f"Invalid JSON response from AliExpress API")
 
     # FIX: Add proper validation for products array
-    products = data.get("result", {}).get("products", {}).get("product", [])
+    result = data.get("result", {})
+    products_data = result.get("products", {})
+    products = products_data.get("product", []) if isinstance(products_data, dict) else []
+    
     if not products or len(products) == 0:
         raise AliexpressError(f"Product {product_id} not found")
     
     item = products[0]
     
+    # Debug: Check if description field is present
+    print(f"🔍 Available fields in API response: {list(item.keys())}")
+    description_field = item.get("description")
+    print(f"🔍 Description field value: {description_field}")
+    print(f"🔍 Description type: {type(description_field)}")
+    
+    # Try to get description from API, fallback to web scraping if not available
+    product_description = None
+    if description_field and str(description_field).strip() and str(description_field).strip().lower() != 'none':
+        product_description = str(description_field).strip()
+        print(f"✅ Using API description: {len(product_description)} chars")
+    else:
+        print("⚠️ Description not available in API, attempting web scraping fallback...")
+        product_url = item.get("product_detail_url", "")
+        if product_url:
+            product_description = _extract_description_from_page(product_url)
+        
+        if not product_description:
+            print("❌ Could not extract description from any source")
+            # Use a generic description based on product title
+            product_title = item.get("product_title", "Product")
+            product_description = f"High-quality {product_title.lower()} available on AliExpress. Check product page for detailed specifications and features."
+    
     # FIX: Validate required fields exist
     required_fields = ["product_id", "product_title", "original_price", "sale_price", "product_detail_url"]
     for field in required_fields:
-        if not item.get(field):
+        field_value = item.get(field)
+        if not field_value:
             raise AliexpressError(f"Missing required field: {field}")
 
-    # FIX: Safe affiliate link generation
-    try:
-        links = generate_affiliate_links([item["product_detail_url"]])
-        affiliate_url = links[0].promotion_link if links and len(links) > 0 else item["product_detail_url"]
-    except Exception as e:
-        # Fallback to original URL if affiliate generation fails
-        print(f"Failed to generate affiliate link: {e}")
-        affiliate_url = item["product_detail_url"]
+    # FIX: Safe affiliate link generation - use existing promotion_link if available
+    if item.get("promotion_link"):
+        affiliate_url = item["promotion_link"]
+    else:
+        # Try to generate affiliate link if promotion_link not available
+        try:
+            links = generate_affiliate_links([item["product_detail_url"]])
+            affiliate_url = links[0].promotion_link if links and len(links) > 0 else item["product_detail_url"]
+        except Exception as e:
+            # Fallback to original URL if affiliate generation fails
+            affiliate_url = item["product_detail_url"]
 
     # Extract shop/seller information for AliExpress
     seller_info = {
@@ -414,7 +551,8 @@ def fetch_product_detail(product_id: str) -> dict:
     except (ValueError, TypeError):
         sold_count = 0
 
-    return ProductDetail(
+    try:
+        product_detail = ProductDetail(
         product_id=str(item["product_id"]),
         title=item.get("product_title", "Unknown Product"),
         original_price=original_price,
@@ -428,7 +566,7 @@ def fetch_product_detail(product_id: str) -> dict:
         rating=rating,
         
         # Enhanced AliExpress-specific fields
-        description=None,
+        description=product_description,
         condition="New",
         brand=None,
         color=None,
@@ -472,4 +610,8 @@ def fetch_product_detail(product_id: str) -> dict:
         categories=categories,
         discount_percentage=discount_percent,
         commission_rate=item.get("commission_rate", ""),
-    ).dict()
+    )
+        return product_detail.dict()
+    
+    except Exception as e:
+        raise AliexpressError(f"Failed to process product data: {str(e)}")

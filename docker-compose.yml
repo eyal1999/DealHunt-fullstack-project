@@ -19,7 +19,7 @@ services:
 
   backend:
     environment:
-          - MONGODB_URI=mongodb://localhost:27017
+          - MONGODB_URI=mongodb://mongodb:27017
     build:
       context: ./backend
       dockerfile: Dockerfile
