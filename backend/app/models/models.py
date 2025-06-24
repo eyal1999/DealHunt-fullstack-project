@@ -1,6 +1,17 @@
+# backend/app/models/models.py
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, AnyHttpUrl, Field, ConfigDict
+
+# ── Pagination models ──────────────────────────────────────────
+class PaginationInfo(BaseModel):
+    """Pagination metadata for search results."""
+    current_page: int = Field(..., description="Current page number (1-based)")
+    page_size: int = Field(..., description="Number of items per page")
+    total_items: int = Field(..., description="Total number of items available")
+    total_pages: int = Field(..., description="Total number of pages")
+    has_next: bool = Field(..., description="Whether there are more pages after current")
+    has_previous: bool = Field(..., description="Whether there are pages before current")
 
 # ── Search / detail payloads ────────────────────────────────────
 class ProductSummary(BaseModel):
@@ -22,8 +33,10 @@ class ProductSummary(BaseModel):
     )
 
 class SearchResponse(BaseModel):
+    """Response model for search results with pagination."""
     query: str
     results: List[ProductSummary]
+    pagination: Optional[PaginationInfo] = None  # Made optional for backward compatibility
 
 class ProductDetail(BaseModel):
     product_id: str

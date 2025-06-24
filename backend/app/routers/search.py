@@ -1,3 +1,4 @@
+# backend/app/routers/search.py
 from fastapi import APIRouter, HTTPException, Query
 from typing import List
 from app.providers import search as provider_search, detail as provider_detail
@@ -17,13 +18,56 @@ def _sort_results(items: List[dict], mode: str) -> List[dict]:
         return sorted(items, key=lambda x: x.get("sale_price", 0), reverse=True)
     return items
 
+def _paginate_results(items: List[dict], page: int, page_size: int) -> dict:
+    """
+    Paginate results and return pagination info.
+    
+    Args:
+        items: List of all items
+        page: Current page (1-based)
+        page_size: Number of items per page
+    
+    Returns:
+        Dictionary with paginated results and metadata
+    """
+    total_items = len(items)
+    total_pages = (total_items + page_size - 1) // page_size  # Ceiling division
+    
+    # Ensure we don't go beyond available pages
+    if page > total_pages and total_pages > 0:
+        page = total_pages
+    
+    # Calculate start and end indices for current page
+    start_index = (page - 1) * page_size
+    end_index = min(start_index + page_size, total_items)  # Don't exceed total items
+    
+    # Get items for current page
+    paginated_items = items[start_index:end_index]
+    
+    # More conservative has_next calculation
+    has_next = (page < total_pages) and (end_index < total_items)
+    
+    return {
+        "items": paginated_items,
+        "pagination": {
+            "current_page": page,
+            "page_size": page_size,
+            "total_items": total_items,
+            "total_pages": total_pages,
+            "has_next": has_next,
+            "has_previous": page > 1,
+            "items_on_page": len(paginated_items)
+        }
+    }
 
 @router.get("/", response_model=SearchResponse)
 def search_products(
     q: str = Query(..., min_length=1, description="Search query"),
     sort: str = Query("price_low", description="Sort order: price_low | price_high"),
+    page: int = Query(1, ge=1, description="Page number (starts from 1)"),
+    page_size: int = Query(12, ge=1, le=50, description="Items per page (1-50)")
 ):
-    """Search for products across all supported marketplaces."""
+    """Search for products across all supported marketplaces with pagination."""
     # Validate sort parameter
     if sort not in VALID_SORT:
         raise HTTPException(
@@ -40,17 +84,25 @@ def search_products(
         raise HTTPException(status_code=400, detail="Search query too long (max 200 characters)")
 
     try:
-        # Search across all providers
-        results = provider_search(query)
+        # Search across all providers (this gets ALL results)
+        all_results = provider_search(query)
         
         # Validate results structure
-        if not isinstance(results, list):
+        if not isinstance(all_results, list):
             raise HTTPException(status_code=500, detail="Invalid search results format")
         
-        # Sort results
-        sorted_items = _sort_results(results, sort)
+        # Sort all results first
+        sorted_items = _sort_results(all_results, sort)
         
-        return SearchResponse(query=query, results=sorted_items)
+        # Apply pagination
+        paginated_data = _paginate_results(sorted_items, page, page_size)
+        
+        # Return response with pagination info
+        return SearchResponse(
+            query=query,
+            results=paginated_data["items"],
+            pagination=paginated_data["pagination"]
+        )
         
     except AliexpressError as e:
         raise HTTPException(status_code=503, detail=f"AliExpress service error: {str(e)}")
@@ -64,74 +116,4 @@ def search_products(
         raise HTTPException(
             status_code=500, 
             detail="Search service temporarily unavailable. Please try again later."
-        )
-
-
-@router.get("/detail/{marketplace}/{product_id}", response_model=ProductDetail)
-def product_detail(marketplace: str, product_id: str):
-    """Get detailed information for a specific product."""
-    
-    # Basic validation only
-    if not marketplace or marketplace.lower() not in VALID_MARKETPLACES:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Invalid marketplace: {marketplace}. Valid options: {', '.join(VALID_MARKETPLACES)}"
-        )
-    
-    # Normalize marketplace name
-    marketplace = marketplace.lower()
-    
-    # Basic product ID validation - just check it's not empty
-    if not product_id or not product_id.strip():
-        raise HTTPException(status_code=400, detail="Product ID is required")
-    
-    product_id = product_id.strip()
-    
-    # REMOVED: Strict format validation - let the services handle their own validation
-    # The services know better what constitutes a valid ID for their platform
-    
-    try:
-        # Get product details from the appropriate provider
-        product_data = provider_detail(marketplace, product_id)
-        
-        # Validate response structure
-        if not product_data or not isinstance(product_data, dict):
-            raise HTTPException(status_code=404, detail="Product not found")
-        
-        return product_data
-        
-    except AliexpressError as e:
-        # Handle AliExpress-specific errors
-        error_msg = str(e)
-        if "not found" in error_msg.lower():
-            raise HTTPException(status_code=404, detail=f"Product not found on AliExpress")
-        else:
-            raise HTTPException(status_code=503, detail=f"AliExpress service error: {error_msg}")
-            
-    except EbayError as e:
-        # Handle eBay-specific errors
-        error_msg = str(e)
-        if "not found" in error_msg.lower():
-            raise HTTPException(status_code=404, detail=f"Product not found on eBay")
-        else:
-            raise HTTPException(status_code=503, detail=f"eBay service error: {error_msg}")
-            
-    except KeyError as e:
-        # Handle missing marketplace in provider registry
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Marketplace '{marketplace}' not supported"
-        )
-        
-    except ValueError as e:
-        # Handle input validation errors
-        raise HTTPException(status_code=400, detail=f"Invalid request: {str(e)}")
-        
-    except Exception as exc:
-        # Log the actual error for debugging but don't expose internal details
-        import logging
-        logging.error(f"Unexpected error in product_detail for {marketplace}/{product_id}: {exc}")
-        raise HTTPException(
-            status_code=500, 
-            detail="Product service temporarily unavailable. Please try again later."
         )
