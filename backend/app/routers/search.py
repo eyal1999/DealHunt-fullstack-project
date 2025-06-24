@@ -117,3 +117,46 @@ def search_products(
             status_code=500, 
             detail="Search service temporarily unavailable. Please try again later."
         )
+
+@router.get("/detail/{marketplace}/{product_id}", response_model=ProductDetail)
+def get_product_detail(
+    marketplace: str,
+    product_id: str
+):
+    """Get detailed information for a specific product."""
+    # Validate marketplace
+    if marketplace not in VALID_MARKETPLACES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid marketplace: {marketplace}. Valid options: {', '.join(VALID_MARKETPLACES)}"
+        )
+    
+    # Validate product ID
+    if not product_id or not product_id.strip():
+        raise HTTPException(status_code=400, detail="Product ID cannot be empty")
+    
+    try:
+        # Get product details from the provider
+        product_detail = provider_detail(marketplace, product_id.strip())
+        
+        if not product_detail:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Product not found: {marketplace}/{product_id}"
+            )
+        
+        return product_detail
+        
+    except AliexpressError as e:
+        raise HTTPException(status_code=503, detail=f"AliExpress service error: {str(e)}")
+    except EbayError as e:
+        raise HTTPException(status_code=503, detail=f"eBay service error: {str(e)}")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid request: {str(e)}")
+    except Exception as exc:
+        import logging
+        logging.error(f"Unexpected error in get_product_detail: {exc}")
+        raise HTTPException(
+            status_code=500,
+            detail="Product detail service temporarily unavailable. Please try again later."
+        )

@@ -20,15 +20,15 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Load user data from localStorage on initial render
+  // Load user data from storage on initial render
   useEffect(() => {
     const loadUser = async () => {
-      const token = localStorage.getItem("token");
-      const userData = localStorage.getItem("user");
+      const token = authService.getStorage("token");
+      const userData = authService.getStorage("user");
 
       if (token && userData) {
         try {
-          // Set user from localStorage initially
+          // Set user from storage initially
           setCurrentUser(JSON.parse(userData));
 
           // Then verify token validity by calling the API
@@ -49,12 +49,12 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   // Regular email/password login function
-  const login = async (email, password) => {
+  const login = async (email, password, rememberMe = false) => {
     try {
       setError(null);
       setLoading(true);
 
-      const data = await authService.login(email, password);
+      const data = await authService.login(email, password, rememberMe);
 
       setCurrentUser(data.user);
       return { success: true };
@@ -67,14 +67,14 @@ export const AuthProvider = ({ children }) => {
   };
 
   // Google Sign-In function (existing users only)
-  const googleSignIn = async (googleIdToken) => {
+  const googleSignIn = async (googleIdToken, rememberMe = true) => {
     try {
       setError(null);
       setLoading(true);
 
       console.log("🔵 AuthContext: Starting Google Sign-In...");
 
-      const data = await authService.googleSignIn(googleIdToken);
+      const data = await authService.googleSignIn(googleIdToken, rememberMe);
 
       console.log("✅ AuthContext: Google Sign-In successful", data);
       setCurrentUser(data.user);
@@ -90,14 +90,14 @@ export const AuthProvider = ({ children }) => {
   };
 
   // Google Register function (new users only)
-  const googleRegister = async (googleIdToken) => {
+  const googleRegister = async (googleIdToken, rememberMe = true) => {
     try {
       setError(null);
       setLoading(true);
 
       console.log("🔵 AuthContext: Starting Google Registration...");
 
-      const data = await authService.googleRegister(googleIdToken);
+      const data = await authService.googleRegister(googleIdToken, rememberMe);
 
       console.log("✅ AuthContext: Google Registration successful", data);
       setCurrentUser(data.user);

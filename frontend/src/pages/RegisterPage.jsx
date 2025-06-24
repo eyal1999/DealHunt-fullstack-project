@@ -133,7 +133,7 @@ const RegisterPage = () => {
 
     console.log("🔵 RegisterPage: Google Registration initiated");
 
-    const result = await googleRegister(googleIdToken);
+    const result = await googleRegister(googleIdToken, true); // Default to persistent for registration
 
     setIsGoogleLoading(false);
 
@@ -178,6 +178,7 @@ const RegisterPage = () => {
               onSuccess={handleGoogleSuccess}
               onError={handleGoogleError}
               buttonText="Sign up with Google"
+              loadingText="Creating account..."
               disabled={isLoading || isGoogleLoading}
             />
             <p className="mt-2 text-xs text-gray-500 text-center">

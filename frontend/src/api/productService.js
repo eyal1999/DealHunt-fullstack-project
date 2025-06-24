@@ -46,6 +46,45 @@ const productService = {
       throw error;
     }
   },
+
+  /**
+   * Get featured/trending products for homepage
+   * @param {number} limit - Number of products to fetch (default: 6)
+   * @returns {Promise} - Promise that resolves to featured products
+   */
+  getFeaturedProducts: async (limit = 6) => {
+    try {
+      // Use popular search terms to get "featured" products
+      const featuredSearches = [
+        'wireless earbuds',
+        'smart watch', 
+        'bluetooth speaker',
+        'phone case',
+        'laptop stand',
+        'wireless charger'
+      ];
+      
+      // Pick a random search term to get varied results
+      const randomSearch = featuredSearches[Math.floor(Math.random() * featuredSearches.length)];
+      
+      // Search for products and get first page with limited results
+      const response = await api.get("/search", {
+        q: randomSearch,
+        sort: "price_low",
+        page: 1,
+        page_size: limit,
+      });
+
+      return {
+        success: true,
+        products: response.results || [],
+        searchTerm: randomSearch
+      };
+    } catch (error) {
+      console.error("Error fetching featured products:", error);
+      throw error;
+    }
+  },
 };
 
 export default productService;

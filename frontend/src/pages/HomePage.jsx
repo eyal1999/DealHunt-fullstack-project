@@ -1,47 +1,37 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import ProductCard from "../components/product/ProductCard";
+import productService from "../api/productService";
 
 const HomePage = () => {
   const [searchQuery, setSearchQuery] = useState("");
+  const [featuredProducts, setFeaturedProducts] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
 
-  // Sample featured products data
-  const featuredProducts = [
-    {
-      product_id: "1234",
-      title: "Wireless Earbuds with Noise Cancellation and Long Battery Life",
-      original_price: 59.99,
-      sale_price: 39.99,
-      image: "",
-      detail_url: "/product/aliexpress/1234",
-      affiliate_link: "#",
-      marketplace: "aliexpress",
-      rating: 4.5,
-    },
-    {
-      product_id: "5678",
-      title: "Smart Watch with Heart Rate Monitor and Sleep Tracking",
-      original_price: 89.99,
-      sale_price: 69.99,
-      image: "",
-      detail_url: "/product/ebay/5678",
-      affiliate_link: "#",
-      marketplace: "ebay",
-      rating: 4.2,
-    },
-    {
-      product_id: "9012",
-      title: "Portable Bluetooth Speaker Waterproof",
-      original_price: 45.99,
-      sale_price: 29.99,
-      image: "",
-      detail_url: "/product/aliexpress/9012",
-      affiliate_link: "#",
-      marketplace: "aliexpress",
-      rating: 4.7,
-    },
-  ];
+  // Fetch featured products on component mount
+  useEffect(() => {
+    const fetchFeaturedProducts = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        const response = await productService.getFeaturedProducts(6);
+        setFeaturedProducts(response.products);
+      } catch (err) {
+        console.error("Error fetching featured products:", err);
+        setError("Failed to load featured products. Please try again later.");
+        
+        // Fallback to empty array so the UI doesn't break
+        setFeaturedProducts([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchFeaturedProducts();
+  }, []);
 
   // Handle search form submission
   const handleSearch = (e) => {
@@ -49,6 +39,27 @@ const HomePage = () => {
     if (searchQuery.trim()) {
       navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
     }
+  };
+
+  // Retry loading featured products
+  const retryFeaturedProducts = () => {
+    const fetchFeaturedProducts = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        const response = await productService.getFeaturedProducts(6);
+        setFeaturedProducts(response.products);
+      } catch (err) {
+        console.error("Error fetching featured products:", err);
+        setError("Failed to load featured products. Please try again later.");
+        setFeaturedProducts([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchFeaturedProducts();
   };
 
   return (
@@ -125,11 +136,97 @@ const HomePage = () => {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {featuredProducts.map((product) => (
-            <ProductCard key={product.product_id} product={product} />
-          ))}
-        </div>
+        {/* Loading State */}
+        {isLoading && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[...Array(6)].map((_, index) => (
+              <div
+                key={index}
+                className="bg-white rounded-lg shadow-md overflow-hidden animate-pulse"
+              >
+                <div className="h-48 bg-gray-200"></div>
+                <div className="p-4">
+                  <div className="h-4 bg-gray-200 rounded mb-2"></div>
+                  <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                  <div className="h-6 bg-gray-200 rounded w-1/2"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && (
+          <div className="text-center py-12">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md mx-auto">
+              <svg
+                className="mx-auto h-12 w-12 text-red-400 mb-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
+                />
+              </svg>
+              <h3 className="text-lg font-medium text-red-800 mb-2">
+                Unable to Load Featured Products
+              </h3>
+              <p className="text-red-600 mb-4">{error}</p>
+              <button
+                onClick={retryFeaturedProducts}
+                className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors"
+              >
+                Try Again
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Success State - Show Products */}
+        {!isLoading && !error && featuredProducts.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {featuredProducts.map((product) => (
+              <ProductCard key={product.product_id} product={product} />
+            ))}
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!isLoading && !error && featuredProducts.length === 0 && (
+          <div className="text-center py-12">
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 max-w-md mx-auto">
+              <svg
+                className="mx-auto h-12 w-12 text-gray-400 mb-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2M4 13h2m13-8V4a1 1 0 00-1-1H7a1 1 0 00-1 1v1m8 0V4.5"
+                />
+              </svg>
+              <h3 className="text-lg font-medium text-gray-800 mb-2">
+                No Featured Products Available
+              </h3>
+              <p className="text-gray-600 mb-4">
+                Check back later for the latest deals and trending products.
+              </p>
+              <button
+                onClick={retryFeaturedProducts}
+                className="bg-primary text-white px-4 py-2 rounded-md hover:bg-primary-dark transition-colors"
+              >
+                Refresh
+              </button>
+            </div>
+          </div>
+        )}
       </section>
     </div>
   );

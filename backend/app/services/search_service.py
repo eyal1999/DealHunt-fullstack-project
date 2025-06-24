@@ -9,7 +9,12 @@ from app.models.models import ProductSummary, ProductDetail, PromotionLink
 
 # ------------------------------------------------------------------ constants
 _HEADERS = {"Content-Type": "application/x-www-form-urlencoded;charset=utf-8"}
-MAX_LINKS_PER_CALL = 12        # search page_size AND link-gen batch size
+MAX_PRODUCTS_PER_PAGE = 50      # Increased from 12 to 50 for more results per search
+MAX_AFFILIATE_LINKS_PER_CALL = 50  # AliExpress allows up to 50 URLs per affiliate link call
+
+# Search configuration - easily adjustable
+DEFAULT_MAX_PAGES = 2           # Default pages to fetch (2 × 50 = 100 products)
+AGGRESSIVE_MAX_PAGES = 4        # For when we want more results (4 × 50 = 200 products)
 
 # ------------------------------------------------------------------ helpers
 def _base_params(method: str) -> dict[str, str]:
@@ -48,8 +53,8 @@ def generate_affiliate_links(
     if not raw_values:
         return []
         
-    if len(raw_values) > MAX_LINKS_PER_CALL:
-        raise ValueError(f"AliExpress allows max {MAX_LINKS_PER_CALL} URLs per call.")
+    if len(raw_values) > MAX_AFFILIATE_LINKS_PER_CALL:
+        raise ValueError(f"AliExpress allows max {MAX_AFFILIATE_LINKS_PER_CALL} URLs per call.")
 
     params = _base_params("aliexpress.affiliate.link.generate")
     params.update(
@@ -104,15 +109,64 @@ def generate_affiliate_links(
 
     return promo_links
 
+
+def generate_affiliate_links_batch(source_urls: List[str]) -> List[PromotionLink]:
+    """
+    Generate affiliate links for a large number of URLs by batching them.
+    
+    AliExpress allows max 50 URLs per call, so this function automatically
+    splits larger lists into batches and combines the results.
+    
+    Args:
+        source_urls: List of product URLs to convert to affiliate links
+        
+    Returns:
+        List of PromotionLink objects for all URLs
+    """
+    if not source_urls:
+        return []
+    
+    all_links = []
+    batch_size = MAX_AFFILIATE_LINKS_PER_CALL  # 50
+    
+    # Process URLs in batches of 50
+    for i in range(0, len(source_urls), batch_size):
+        batch = source_urls[i:i + batch_size]
+        print(f"🔗 Generating affiliate links for batch {i//batch_size + 1}: {len(batch)} URLs")
+        
+        try:
+            links = generate_affiliate_links(batch)
+            all_links.extend(links)
+            print(f"✅ Generated {len(links)} affiliate links for batch {i//batch_size + 1}")
+        except Exception as e:
+            print(f"❌ Failed to generate affiliate links for batch {i//batch_size + 1}: {e}")
+            # Continue with other batches even if one fails
+            continue
+    
+    print(f"🎉 Total affiliate links generated: {len(all_links)} out of {len(source_urls)} URLs")
+    return all_links
+
 # ---------------------------------------------------------------- search
-def search_products(query: str) -> List[dict]:
-    """Return a list of ProductSummary dicts sorted by recent sales volume."""
+def search_products(query: str, page_no: int = 1, page_size: int = None) -> List[dict]:
+    """Return a list of ProductSummary dicts sorted by recent sales volume.
+    
+    Args:
+        query: Search keywords
+        page_no: Page number (1-based)
+        page_size: Number of products per page (max 50)
+    """
+    if page_size is None:
+        page_size = MAX_PRODUCTS_PER_PAGE
+    
+    # Ensure page_size doesn't exceed our maximum
+    page_size = min(page_size, MAX_PRODUCTS_PER_PAGE)
+    
     params = _base_params("aliexpress.affiliate.product.query")
     params.update(
         {
             "keywords": query,
-            "page_no": 1,
-            "page_size": MAX_LINKS_PER_CALL,         # 12
+            "page_no": page_no,
+            "page_size": page_size,
             "sort": "LAST_VOLUME_DESC",
             "tracking_id": settings.tracking_id,
         }
@@ -138,7 +192,8 @@ def search_products(query: str) -> List[dict]:
         
     detail_urls = [p["product_detail_url"] for p in products if p.get("product_detail_url")]
 
-    links = generate_affiliate_links(detail_urls)
+    # Use batched affiliate link generation for better handling of larger result sets
+    links = generate_affiliate_links_batch(detail_urls)
     link_map = {l.source_value: l.promotion_link for l in links}
 
     summaries = []
@@ -189,6 +244,46 @@ def search_products(query: str) -> List[dict]:
             continue
             
     return summaries
+
+
+def search_products_multi_page(query: str, max_pages: int = None, page_size: int = None) -> List[dict]:
+    """Search for products across multiple pages to get more results.
+    
+    Args:
+        query: Search keywords
+        max_pages: Maximum number of pages to fetch (default: 2 for 100 total results)
+        page_size: Number of products per page (max 50)
+    
+    Returns:
+        List of ProductSummary dicts from all pages combined
+    """
+    if max_pages is None:
+        max_pages = DEFAULT_MAX_PAGES
+    
+    if page_size is None:
+        page_size = MAX_PRODUCTS_PER_PAGE
+    
+    all_products = []
+    
+    for page in range(1, max_pages + 1):
+        try:
+            print(f"📄 Fetching page {page} of {max_pages} for query: '{query}'")
+            products = search_products(query, page_no=page, page_size=page_size)
+            
+            if not products:
+                print(f"✅ No more results found on page {page}, stopping pagination")
+                break
+                
+            all_products.extend(products)
+            print(f"✅ Page {page}: Found {len(products)} products (Total: {len(all_products)})")
+            
+        except Exception as e:
+            print(f"❌ Error fetching page {page}: {e}")
+            # Continue with other pages even if one fails
+            continue
+    
+    print(f"🎉 Multi-page search completed: {len(all_products)} total products found")
+    return all_products
 
 # ---------------------------------------------------------------- product detail
 def fetch_product_detail(product_id: str) -> dict:

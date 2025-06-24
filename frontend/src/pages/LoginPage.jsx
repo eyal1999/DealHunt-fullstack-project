@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import GoogleSignInButton from "../components/auth/GoogleSignInButton";
+import { useAutoWishlist } from "../hooks/useAutoWishlist";
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -29,6 +30,9 @@ const LoginPage = () => {
   const redirectMessage = location.state?.message;
   const redirectAction = location.state?.action;
   const productTitle = location.state?.productTitle;
+
+  // Enable auto-wishlist functionality
+  useAutoWishlist();
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -88,7 +92,7 @@ const LoginPage = () => {
     setIsLoading(true);
     clearError();
 
-    const result = await login(formData.email, formData.password);
+    const result = await login(formData.email, formData.password, formData.rememberMe);
 
     setIsLoading(false);
 
@@ -106,7 +110,7 @@ const LoginPage = () => {
 
     console.log("🔵 LoginPage: Google Sign-In initiated");
 
-    const result = await googleSignIn(googleIdToken);
+    const result = await googleSignIn(googleIdToken, formData.rememberMe);
 
     setIsGoogleLoading(false);
 
@@ -167,6 +171,7 @@ const LoginPage = () => {
               onSuccess={handleGoogleSuccess}
               onError={handleGoogleError}
               buttonText="Sign in with Google"
+              loadingText="Signing in..."
               disabled={isLoading || isGoogleLoading}
             />
           </div>

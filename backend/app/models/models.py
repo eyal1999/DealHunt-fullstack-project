@@ -19,9 +19,9 @@ class ProductSummary(BaseModel):
     title: str
     original_price: float
     sale_price: float
-    image: AnyHttpUrl
-    detail_url: AnyHttpUrl
-    affiliate_link: AnyHttpUrl
+    image: Optional[str] = None  # Changed to Optional[str] to handle empty/invalid URLs
+    detail_url: str  # Changed to str to handle relative URLs
+    affiliate_link: Optional[str] = None  # Made optional in case affiliate link is missing
     marketplace: str = "aliexpress"
     sold_count: Optional[int] = None
     rating: Optional[float] = None
@@ -43,10 +43,10 @@ class ProductDetail(BaseModel):
     title: str
     original_price: float
     sale_price: float
-    main_image: AnyHttpUrl
-    images: List[AnyHttpUrl]
-    url: AnyHttpUrl
-    affiliate_link: AnyHttpUrl
+    main_image: Optional[str] = None  # Changed to Optional[str] to handle empty/invalid URLs
+    images: List[str] = []  # Changed to List[str] with default empty list
+    url: str  # Changed to str to handle relative URLs
+    affiliate_link: Optional[str] = None  # Made optional
     marketplace: str = "aliexpress"
     sold_count: Optional[int] = None
     rating: Optional[float] = None

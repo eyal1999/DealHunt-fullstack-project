@@ -11,6 +11,7 @@ const GoogleSignInButton = ({
   onError,
   buttonText = "Continue with Google",
   disabled = false,
+  loadingText, // Allow custom loading text
 }) => {
   const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -18,6 +19,26 @@ const GoogleSignInButton = ({
   const [loadingError, setLoadingError] = useState(null);
   const [debugInfo, setDebugInfo] = useState("Initializing...");
   const googleButtonRef = useRef(null);
+  const isLoadingRef = useRef(false);
+
+  // Keep isLoadingRef in sync with isLoading state
+  useEffect(() => {
+    isLoadingRef.current = isLoading;
+  }, [isLoading]);
+
+  // Derive loading text from button text if not provided
+  const getLoadingText = () => {
+    if (loadingText) return loadingText;
+    
+    // Smart detection based on button text
+    if (buttonText.toLowerCase().includes('sign up') || buttonText.toLowerCase().includes('register')) {
+      return "Signing up...";
+    } else if (buttonText.toLowerCase().includes('sign in') || buttonText.toLowerCase().includes('login')) {
+      return "Signing in...";
+    } else {
+      return "Loading...";
+    }
+  };
 
   /**
    * Load Google Sign-In SDK and configuration
@@ -106,6 +127,17 @@ const GoogleSignInButton = ({
     loadGoogleSDK();
   }, [onError]);
 
+  // Cleanup on component unmount
+  useEffect(() => {
+    return () => {
+      // Clear any pending timeouts
+      if (window.googleAuthTimeout) {
+        clearTimeout(window.googleAuthTimeout);
+        window.googleAuthTimeout = null;
+      }
+    };
+  }, []);
+
   /**
    * Initialize Google Sign-In and render the button
    */
@@ -193,17 +225,54 @@ const GoogleSignInButton = ({
       setIsLoading(true);
       console.log("🔵 Triggering Google Sign-In...");
 
-      // Set a timeout to detect if user cancels/closes popup
+      // Clear any existing timeout
+      if (window.googleAuthTimeout) {
+        clearTimeout(window.googleAuthTimeout);
+        window.googleAuthTimeout = null;
+      }
+
+      // Set up popup close detection
+      const startTime = Date.now();
+      
+      // Set a reasonable timeout to detect if user cancels/closes popup
       const cancelTimeout = setTimeout(() => {
-        if (isLoading) {
-          console.log("⚠️ Google Sign-In appears to have been cancelled");
+        const elapsed = Date.now() - startTime;
+        // Only show cancel message if enough time has passed (user likely closed popup)
+        if (elapsed < 2000) {
+          console.log("⚠️ Google Sign-In popup closed quickly - user likely cancelled");
           setIsLoading(false);
-          onError?.("Google Sign-In was cancelled. Please try again if you want to continue.");
+          // Don't show error for quick cancellation - it's user choice
+        } else {
+          console.log("⚠️ Google Sign-In timeout - taking too long");
+          setIsLoading(false);
+          onError?.("Google Sign-In is taking too long. Please try again.");
         }
-      }, 30000); // 30 seconds timeout
+      }, 60000); // 60 seconds timeout (more generous)
 
       // Store the timeout reference so we can clear it if auth succeeds
       window.googleAuthTimeout = cancelTimeout;
+
+      // Additional popup focus detection (best practice)
+      const checkPopupClosed = () => {
+        // This detects when user returns focus to main window (popup closed)
+        const focusHandler = () => {
+          setTimeout(() => {
+            if (isLoadingRef.current && Date.now() - startTime > 1000) {
+              console.log("⚠️ Focus returned to main window - popup likely closed");
+              setIsLoading(false);
+              if (window.googleAuthTimeout) {
+                clearTimeout(window.googleAuthTimeout);
+                window.googleAuthTimeout = null;
+              }
+            }
+          }, 500); // Small delay to allow for successful auth completion
+        };
+        
+        window.addEventListener('focus', focusHandler, { once: true });
+      };
+
+      // Start popup detection
+      checkPopupClosed();
 
       // Find and click the actual Google button
       const googleButton = googleButtonRef.current.querySelector('[role="button"]');
@@ -279,7 +348,7 @@ const GoogleSignInButton = ({
           // Loading state during sign-in process
           <>
             <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-600 mr-3"></div>
-            <span>Signing in...</span>
+            <span>{getLoadingText()}</span>
           </>
         ) : !isGoogleLoaded ? (
           // Loading state while SDK loads

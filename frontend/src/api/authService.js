@@ -3,12 +3,52 @@ import api from "./index";
 
 const authService = {
   /**
+   * Set storage method based on remember me setting
+   * @param {boolean} rememberMe - Whether to use persistent storage
+   * @param {string} key - Storage key
+   * @param {string} value - Storage value
+   */
+  setStorage: (rememberMe, key, value) => {
+    if (rememberMe) {
+      // Use localStorage for persistent storage (survives browser restart)
+      localStorage.setItem(key, value);
+      // Remove from sessionStorage if it exists
+      sessionStorage.removeItem(key);
+    } else {
+      // Use sessionStorage for temporary storage (cleared on browser close)
+      sessionStorage.setItem(key, value);
+      // Remove from localStorage if it exists
+      localStorage.removeItem(key);
+    }
+  },
+
+  /**
+   * Get value from either storage method
+   * @param {string} key - Storage key
+   * @returns {string|null} - Storage value or null
+   */
+  getStorage: (key) => {
+    // Check localStorage first, then sessionStorage
+    return localStorage.getItem(key) || sessionStorage.getItem(key);
+  },
+
+  /**
+   * Remove value from both storage methods
+   * @param {string} key - Storage key
+   */
+  removeStorage: (key) => {
+    localStorage.removeItem(key);
+    sessionStorage.removeItem(key);
+  },
+
+  /**
    * Login user with email/password
    * @param {string} email - User email
    * @param {string} password - User password
+   * @param {boolean} rememberMe - Whether to persist login across browser sessions
    * @returns {Promise} - Promise that resolves to user data and token
    */
-  login: async (email, password) => {
+  login: async (email, password, rememberMe = false) => {
     try {
       // Create form data format for OAuth2 endpoint
       const formData = new FormData();
@@ -29,10 +69,10 @@ const authService = {
       const data = await response.json();
       console.log(data);
 
-      // Save token to localStorage
+      // Save token using appropriate storage method based on rememberMe
       if (data.access_token) {
-        localStorage.setItem("token", data.access_token);
-        localStorage.setItem("user", JSON.stringify(data.user));
+        authService.setStorage(rememberMe, "token", data.access_token);
+        authService.setStorage(rememberMe, "user", JSON.stringify(data.user));
       }
 
       return data;
@@ -45,9 +85,10 @@ const authService = {
   /**
    * Sign in with Google ID token (existing users only)
    * @param {string} googleIdToken - Google ID token from Google Sign-In
+   * @param {boolean} rememberMe - Whether to persist login across browser sessions
    * @returns {Promise} - Promise that resolves to user data and token
    */
-  googleSignIn: async (googleIdToken) => {
+  googleSignIn: async (googleIdToken, rememberMe = true) => {
     try {
       console.log("🔵 Starting Google Sign-In with backend...");
 
@@ -70,10 +111,10 @@ const authService = {
       const data = await response.json();
       console.log("✅ Google Sign-In successful:", data);
 
-      // Save token to localStorage (same as regular login)
+      // Save token using appropriate storage based on rememberMe setting
       if (data.access_token) {
-        localStorage.setItem("token", data.access_token);
-        localStorage.setItem("user", JSON.stringify(data.user));
+        authService.setStorage(rememberMe, "token", data.access_token);
+        authService.setStorage(rememberMe, "user", JSON.stringify(data.user));
       }
 
       return data;
@@ -86,9 +127,10 @@ const authService = {
   /**
    * Register with Google ID token (new users only)
    * @param {string} googleIdToken - Google ID token from Google Sign-In
+   * @param {boolean} rememberMe - Whether to persist login across browser sessions
    * @returns {Promise} - Promise that resolves to user data and token
    */
-  googleRegister: async (googleIdToken) => {
+  googleRegister: async (googleIdToken, rememberMe = true) => {
     try {
       console.log("🔵 Starting Google Registration with backend...");
 
@@ -111,10 +153,10 @@ const authService = {
       const data = await response.json();
       console.log("✅ Google Registration successful:", data);
 
-      // Save token to localStorage (same as regular registration)
+      // Save token using appropriate storage based on rememberMe setting
       if (data.access_token) {
-        localStorage.setItem("token", data.access_token);
-        localStorage.setItem("user", JSON.stringify(data.user));
+        authService.setStorage(rememberMe, "token", data.access_token);
+        authService.setStorage(rememberMe, "user", JSON.stringify(data.user));
       }
 
       return data;
@@ -162,7 +204,7 @@ const authService = {
    */
   linkGoogleAccount: async (googleIdToken) => {
     try {
-      const token = localStorage.getItem("token");
+      const token = authService.getStorage("token");
 
       if (!token) {
         throw new Error("No authentication token found");
@@ -197,7 +239,7 @@ const authService = {
    */
   unlinkGoogleAccount: async () => {
     try {
-      const token = localStorage.getItem("token");
+      const token = authService.getStorage("token");
 
       if (!token) {
         throw new Error("No authentication token found");
@@ -250,8 +292,8 @@ const authService = {
    * Logout user
    */
   logout: () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    authService.removeStorage("token");
+    authService.removeStorage("user");
 
     // Also sign out from Google if they're signed in
     if (window.google && window.google.accounts && window.google.accounts.id) {
@@ -269,7 +311,7 @@ const authService = {
    */
   getCurrentUser: async () => {
     try {
-      const token = localStorage.getItem("token");
+      const token = authService.getStorage("token");
 
       if (!token) {
         throw new Error("No authentication token found");
@@ -303,7 +345,7 @@ const authService = {
    * @returns {boolean} - True if user is authenticated
    */
   isAuthenticated: () => {
-    return localStorage.getItem("token") !== null;
+    return authService.getStorage("token") !== null;
   },
 };
 

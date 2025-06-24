@@ -8,6 +8,7 @@ import React, {
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { productService, wishlistService } from "../api/apiServices";
 import { useAuth } from "../contexts/AuthContext";
+import { useAutoWishlist } from "../hooks/useAutoWishlist";
 
 // Enhanced hook for handling AliExpress images with CORS issues
 const useAliExpressImage = (originalSrc, fallbackSrc) => {
@@ -361,6 +362,9 @@ const ProductDetailPage = () => {
   const navigate = useNavigate();
   const { isAuthenticated, currentUser } = useAuth();
 
+  // Enable auto-wishlist functionality
+  useAutoWishlist();
+
   // State management
   const [product, setProduct] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -422,6 +426,21 @@ const ProductDetailPage = () => {
   const handleAddToWishlist = useCallback(async () => {
     // Check if user is authenticated
     if (!isAuthenticated) {
+      // Prepare complete product data for auto-add after login
+      const wishlistData = {
+        product_id: product.product_id,
+        marketplace: product.marketplace,
+        title: product.title,
+        original_price: product.original_price,
+        sale_price: product.sale_price,
+        image: product.main_image,
+        detail_url: window.location.href, // Current product page URL
+        affiliate_link: product.affiliate_link,
+      };
+
+      // Store wishlist data in sessionStorage for persistence across navigation
+      sessionStorage.setItem('pendingWishlistAdd', JSON.stringify(wishlistData));
+
       // Redirect to login with information about the intended action
       navigate("/login", {
         state: {

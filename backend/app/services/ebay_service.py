@@ -158,19 +158,32 @@ def search_products_ebay(query: str) -> List[dict]:
         resp.raise_for_status()
         items = resp.json().get("itemSummaries", [])
         
-        results = [
-            ProductSummary(
-                product_id=i["itemId"],
-                title=i["title"],
-                original_price=float(i["price"]["value"]),
-                sale_price=float(i["price"]["value"]),
-                image=i.get("image", {}).get("imageUrl", ""),
-                detail_url=i["itemWebUrl"],
-                affiliate_link=i.get("itemAffiliateWebUrl", i["itemWebUrl"]),
-                marketplace="ebay",
-            ).model_dump()
-            for i in items
-        ]
+        results = []
+        for i in items:
+            # Handle image URL safely - convert empty strings to None
+            image_url = i.get("image", {}).get("imageUrl", "") 
+            image_url = image_url if image_url and image_url.strip() else None
+            
+            # Handle affiliate link safely
+            affiliate_link = i.get("itemAffiliateWebUrl", i["itemWebUrl"])
+            affiliate_link = affiliate_link if affiliate_link and affiliate_link.strip() else None
+            
+            try:
+                product = ProductSummary(
+                    product_id=i["itemId"],
+                    title=i["title"],
+                    original_price=float(i["price"]["value"]),
+                    sale_price=float(i["price"]["value"]),
+                    image=image_url,
+                    detail_url=i["itemWebUrl"],
+                    affiliate_link=affiliate_link,
+                    marketplace="ebay",
+                )
+                results.append(product.model_dump())
+            except Exception as validation_error:
+                print(f"eBay product validation error for item {i.get('itemId')}: {validation_error}")
+                # Skip invalid products instead of failing the entire search
+                continue
         return results
     except Exception as e:
         print(f"eBay search error: {e}")
@@ -275,15 +288,26 @@ def fetch_product_detail_ebay(item_id: str) -> dict:
         raw_description = item.get("description", item.get("shortDescription", ""))
         cleaned_description = clean_ebay_description(raw_description)
 
+        # Handle main image URL safely
+        main_image_url = item.get("image", {}).get("imageUrl", "")
+        main_image_url = main_image_url if main_image_url and main_image_url.strip() else None
+        
+        # Handle affiliate link safely
+        affiliate_link = item.get("itemAffiliateWebUrl", item["itemWebUrl"])
+        affiliate_link = affiliate_link if affiliate_link and affiliate_link.strip() else None
+        
+        # Filter out empty image URLs from all_images list
+        filtered_images = [img for img in all_images if img and img.strip()]
+        
         return ProductDetail(
             product_id=item["itemId"],
             title=item["title"],
             original_price=float(item["price"]["value"]),
             sale_price=float(item["price"]["value"]),
-            main_image=item.get("image", {}).get("imageUrl", ""),
-            images=all_images,
+            main_image=main_image_url,
+            images=filtered_images,
             url=item["itemWebUrl"],
-            affiliate_link=item.get("itemAffiliateWebUrl", item["itemWebUrl"]),
+            affiliate_link=affiliate_link,
             marketplace="ebay",
             # FIXED: Use cleaned description instead of raw
             description=cleaned_description,

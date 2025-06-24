@@ -19,6 +19,21 @@ const ProductCard = ({ product }) => {
 
       // Check if user is authenticated
       if (!isAuthenticated) {
+        // Prepare complete product data for auto-add after login
+        const wishlistData = {
+          product_id: product.product_id,
+          marketplace: product.marketplace,
+          title: product.title,
+          original_price: product.original_price,
+          sale_price: product.sale_price,
+          image: product.image,
+          detail_url: `/product/${product.marketplace}/${product.product_id}`,
+          affiliate_link: product.affiliate_link,
+        };
+
+        // Store wishlist data in sessionStorage for persistence across navigation
+        sessionStorage.setItem('pendingWishlistAdd', JSON.stringify(wishlistData));
+
         // Redirect to login with information about the intended action
         navigate("/login", {
           state: {
