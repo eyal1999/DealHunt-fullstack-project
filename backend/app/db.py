@@ -15,6 +15,7 @@ users_collection = db.users
 products_collection = db.products
 wishlist_collection = db.wishlist
 search_cache_collection = db.search_cache
+password_reset_collection = db.password_reset_tokens
 
 async def ping_database():
     """Check if the database connection is working."""

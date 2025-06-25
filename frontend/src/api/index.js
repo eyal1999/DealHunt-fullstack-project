@@ -1,5 +1,5 @@
 // Base API configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8003";
 
 const api = {
   baseURL: API_BASE_URL,
@@ -17,8 +17,8 @@ const api = {
       ...options.headers,
     };
 
-    // Add auth token if available
-    const token = localStorage.getItem("token");
+    // Add auth token if available (check both localStorage and sessionStorage)
+    const token = localStorage.getItem("token") || sessionStorage.getItem("token");
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
     }
@@ -37,6 +37,8 @@ const api = {
       if (response.status === 401) {
         localStorage.removeItem("token");
         localStorage.removeItem("user");
+        sessionStorage.removeItem("token");
+        sessionStorage.removeItem("user");
         
         // Only redirect to login if we're not already there
         if (!window.location.pathname.includes('/login')) {

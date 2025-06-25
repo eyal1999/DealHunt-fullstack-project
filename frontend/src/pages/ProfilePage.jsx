@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { useAuth } from "../contexts/AuthContext";
+import profileService from "../api/profileService";
 
 const ProfilePage = () => {
   const { currentUser } = useAuth();
@@ -8,8 +9,10 @@ const ProfilePage = () => {
   const [profileData, setProfileData] = useState({
     fullName: currentUser?.fullName || "",
     email: currentUser?.email || "",
-    avatar: currentUser?.avatar || "https://via.placeholder.com/150",
   });
+
+  const fileInputRef = useRef(null);
+  const [isUploadingPicture, setIsUploadingPicture] = useState(false);
 
   const [passwordData, setPasswordData] = useState({
     currentPassword: "",
@@ -20,6 +23,14 @@ const ProfilePage = () => {
   const [errors, setErrors] = useState({});
   const [successMessage, setSuccessMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  // Get profile picture URL
+  const getProfilePictureUrl = () => {
+    if (currentUser?.picture_url) {
+      return profileService.getProfilePictureUrl(currentUser.picture_url);
+    }
+    return profileService.getDefaultAvatar(currentUser?.full_name || 'User');
+  };
 
   // Handle profile form input changes
   const handleProfileChange = (e) => {
@@ -150,6 +161,48 @@ const ProfilePage = () => {
     }, 1000);
   };
 
+  // Handle profile picture upload
+  const handleProfilePictureChange = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setErrors({ profilePicture: 'Please select a valid image file' });
+      return;
+    }
+
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      setErrors({ profilePicture: 'Image size must be less than 5MB' });
+      return;
+    }
+
+    setIsUploadingPicture(true);
+    setErrors({});
+
+    try {
+      const response = await profileService.uploadProfilePicture(file);
+      setSuccessMessage('Profile picture updated successfully!');
+      
+      // Force auth context to refresh user data
+      window.location.reload(); // Simple approach - you could also update auth context
+    } catch (error) {
+      setErrors({ profilePicture: error.message || 'Failed to upload image' });
+    } finally {
+      setIsUploadingPicture(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  // Trigger file input click
+  const handleChangePhotoClick = () => {
+    fileInputRef.current?.click();
+  };
+
   return (
     <div className="max-w-4xl mx-auto">
       <h1 className="text-3xl font-bold mb-6">My Account</h1>
@@ -197,22 +250,48 @@ const ProfilePage = () => {
             <div>
               <div className="flex flex-col sm:flex-row items-start sm:items-center mb-6">
                 <div className="mb-4 sm:mb-0 sm:mr-6">
-                  <div className="w-24 h-24 rounded-full overflow-hidden bg-gray-200">
+                  <div className="w-24 h-24 rounded-full overflow-hidden bg-gray-200 relative">
                     <img
-                      src={profileData.avatar}
+                      src={getProfilePictureUrl()}
                       alt="Profile"
                       className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.src = profileService.getDefaultAvatar(currentUser?.full_name || 'User');
+                      }}
                     />
+                    {isUploadingPicture && (
+                      <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+                        <div className="text-white text-xs">Uploading...</div>
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div>
                   <h2 className="text-xl font-semibold mb-1">
-                    {currentUser?.fullName}
+                    {currentUser?.full_name || currentUser?.fullName}
                   </h2>
                   <p className="text-gray-600 mb-3">{currentUser?.email}</p>
-                  <button className="text-primary text-sm hover:underline">
-                    Change profile photo
-                  </button>
+                  <div>
+                    <button 
+                      onClick={handleChangePhotoClick}
+                      disabled={isUploadingPicture}
+                      className="text-primary text-sm hover:underline disabled:opacity-50"
+                    >
+                      {isUploadingPicture ? 'Uploading...' : 'Change profile photo'}
+                    </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleProfilePictureChange}
+                      className="hidden"
+                    />
+                  </div>
+                  {errors.profilePicture && (
+                    <p className="text-red-500 text-sm mt-1">
+                      {errors.profilePicture}
+                    </p>
+                  )}
                 </div>
               </div>
 

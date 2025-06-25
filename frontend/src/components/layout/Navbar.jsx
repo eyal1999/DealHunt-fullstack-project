@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import DealHuntLogo from "../../assets/DEALHUNT_LOGO.png";
+import profileService from "../../api/profileService";
 
 const Navbar = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -10,6 +11,14 @@ const Navbar = () => {
   const dropdownTimeoutRef = useRef(null);
   const navigate = useNavigate();
   const { currentUser, logout } = useAuth();
+
+  // Get profile picture URL
+  const getProfilePictureUrl = () => {
+    if (currentUser?.picture_url) {
+      return profileService.getProfilePictureUrl(currentUser.picture_url);
+    }
+    return profileService.getDefaultAvatar(currentUser?.full_name || 'User');
+  };
 
   // Cleanup timeout on component unmount
   useEffect(() => {
@@ -117,6 +126,16 @@ const Navbar = () => {
                   onMouseLeave={handleDropdownMouseLeave}
                 >
                   <button className="flex items-center text-primary hover:text-primary-dark focus:outline-none">
+                    <div className="w-8 h-8 rounded-full overflow-hidden mr-2 border-2 border-primary">
+                      <img
+                        src={getProfilePictureUrl()}
+                        alt="Profile"
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.src = profileService.getDefaultAvatar(currentUser?.full_name || 'User');
+                        }}
+                      />
+                    </div>
                     <span className="mr-1">
                       {currentUser["full_name"].split(" ")[0]}
                     </span>

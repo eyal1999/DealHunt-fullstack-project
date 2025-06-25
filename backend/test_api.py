@@ -3,7 +3,7 @@ import requests
 import json
 
 # Base URL of your API
-BASE_URL = "http://localhost:8000"
+BASE_URL = "http://localhost:8003"
 
 def test_register():
     url = f"{BASE_URL}/auth/register"

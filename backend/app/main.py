@@ -1,6 +1,8 @@
 # backend/app/main.py
+from datetime import datetime
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from motor.motor_asyncio import AsyncIOMotorClient
 from contextlib import asynccontextmanager
 
@@ -50,9 +52,19 @@ app.include_router(auth.router)
 app.include_router(google_auth.router)  # Add Google auth router
 app.include_router(wishlist.router)
 
+# Mount static files for profile pictures
+import os
+os.makedirs("uploads", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
 @app.get("/")
 def root():
     return {"message": "Welcome to DealHunt with Google OAuth!"}
+
+@app.get("/health")
+def health_check():
+    """Health check endpoint for Docker containers."""
+    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
 
 async def connect_to_mongo():
     """Create database connection."""

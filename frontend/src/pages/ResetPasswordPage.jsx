@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import api from "../api/index";
 
 const ResetPasswordPage = () => {
   const [searchParams] = useSearchParams();
@@ -66,32 +67,13 @@ const ResetPasswordPage = () => {
 
     setIsLoading(true);
 
-    // In a real app, call your password reset API
-    // try {
-    //   const response = await fetch('/api/auth/reset-password', {
-    //     method: 'POST',
-    //     headers: { 'Content-Type': 'application/json' },
-    //     body: JSON.stringify({
-    //       token,
-    //       password: formData.password
-    //     })
-    //   });
-    //
-    //   if (response.ok) {
-    //     setIsSuccess(true);
-    //   } else {
-    //     const data = await response.json();
-    //     setErrors({ general: data.message || 'Password reset failed' });
-    //   }
-    // } catch (error) {
-    //   setErrors({ general: 'Something went wrong. Please try again.' });
-    // }
-
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      await api.post('/auth/reset-password', {
+        token,
+        new_password: formData.password
+      });
       setIsSuccess(true);
-
+      
       // After success, redirect to login after 3 seconds
       setTimeout(() => {
         navigate("/login", {
@@ -101,7 +83,11 @@ const ResetPasswordPage = () => {
           },
         });
       }, 3000);
-    }, 1000);
+    } catch (error) {
+      setErrors({ general: error.data?.detail || 'Something went wrong. Please try again.' });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

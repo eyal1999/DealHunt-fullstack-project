@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
+import api from "../api/index";
 
 const ForgotPasswordPage = () => {
   const [email, setEmail] = useState("");
@@ -42,29 +43,14 @@ const ForgotPasswordPage = () => {
 
     setIsLoading(true);
 
-    // In a real app, call your password reset API
-    // try {
-    //   const response = await fetch('/api/auth/forgot-password', {
-    //     method: 'POST',
-    //     headers: { 'Content-Type': 'application/json' },
-    //     body: JSON.stringify({ email })
-    //   });
-    //
-    //   if (response.ok) {
-    //     setIsSubmitted(true);
-    //   } else {
-    //     const data = await response.json();
-    //     setErrors({ general: data.message || 'Password reset failed' });
-    //   }
-    // } catch (error) {
-    //   setErrors({ general: 'Something went wrong. Please try again.' });
-    // }
-
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      const response = await api.post('/auth/forgot-password', { email });
       setIsSubmitted(true);
-    }, 1000);
+    } catch (error) {
+      setErrors({ general: error.data?.detail || 'Something went wrong. Please try again.' });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
