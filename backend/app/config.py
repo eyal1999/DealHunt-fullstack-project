@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     sign_method: str = "md5"
 
     ebay_token: str = Field(..., validation_alias="EBAY_TOKEN")
+    ebay_refresh_token: str = Field(..., validation_alias="EBAY_REFRESH_TOKEN")
+    ebay_client_id: str = Field(..., validation_alias="EBAY_CLIENT_ID")
+    ebay_client_secret: str = Field(..., validation_alias="EBAY_CLIENT_SECRET")
     ebay_campaign_id: str = Field(..., validation_alias="EBAY_CAMPAIGN_ID")
     ebay_base_url: str = Field(
         "https://api.ebay.com",

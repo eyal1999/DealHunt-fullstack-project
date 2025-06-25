@@ -271,7 +271,7 @@ def search_products(query: str, page_no: int = 1, page_size: int = None) -> List
     )
     params["sign"] = make_signature(params, settings.app_secret)
 
-    resp = requests.post(settings.base_url, data=params, headers=_HEADERS, timeout=(15, 30))
+    resp = requests.post(settings.base_url, data=params, headers=_HEADERS, timeout=(5, 15))
     resp.raise_for_status()
 
     data = (
@@ -399,7 +399,7 @@ def fetch_product_detail(product_id: str) -> dict:
     params["sign"] = make_signature(params, settings.app_secret)
 
     try:
-        resp = requests.post(settings.base_url, data=params, headers=_HEADERS, timeout=(15, 30))
+        resp = requests.post(settings.base_url, data=params, headers=_HEADERS, timeout=(5, 15))
         resp.raise_for_status()
     except requests.exceptions.RequestException as e:
         raise AliexpressError(f"Failed to fetch product details: {str(e)}")

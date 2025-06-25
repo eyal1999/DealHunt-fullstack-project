@@ -7,12 +7,16 @@ from bs4 import BeautifulSoup
 from app.config import settings
 from app.errors import EbayError
 from app.models.models import ProductSummary, ProductDetail
+from app.services.ebay_token_manager import ebay_token_manager
 
-HEADERS = {
-    "Authorization": f"Bearer {settings.ebay_token}",
-    "Content-Type": "application/json",
-    "X-EBAY-C-ENDUSERCTX": f"affiliateCampaignId={settings.ebay_campaign_id}",
-}
+def _get_headers() -> dict:
+    """Get headers with current valid token."""
+    return {
+        "Authorization": f"Bearer {ebay_token_manager.get_valid_token()}",
+        "Content-Type": "application/json",
+        "X-EBAY-C-ENDUSERCTX": f"affiliateCampaignId={settings.ebay_campaign_id}",
+    }
+
 BROWSE = f"{settings.ebay_base_url}/buy/browse/v1"
 
 def clean_ebay_description(description: str) -> str:
@@ -154,7 +158,14 @@ def clean_ebay_description(description: str) -> str:
 def search_products_ebay(query: str) -> List[dict]:
     try:
         resp = requests.get(f"{settings.ebay_base_url}/buy/browse/v1/item_summary/search",
-            params={"q": query},headers=HEADERS,timeout=(5, 30),)
+            params={"q": query},headers=_get_headers(),timeout=(3, 10),)
+        
+        # If we get 401/403, try refreshing token once
+        if resp.status_code in [401, 403]:
+            ebay_token_manager.force_refresh()
+            resp = requests.get(f"{settings.ebay_base_url}/buy/browse/v1/item_summary/search",
+                params={"q": query},headers=_get_headers(),timeout=(3, 10),)
+        
         resp.raise_for_status()
         items = resp.json().get("itemSummaries", [])
         
@@ -193,7 +204,14 @@ def search_products_ebay(query: str) -> List[dict]:
 def fetch_product_detail_ebay(item_id: str) -> dict:
     try:
         resp = requests.get(f"{settings.ebay_base_url}/buy/browse/v1/item/{item_id}",
-            headers=HEADERS,timeout=(5, 30),)
+            headers=_get_headers(),timeout=(3, 10),)
+        
+        # If we get 401/403, try refreshing token once
+        if resp.status_code in [401, 403]:
+            ebay_token_manager.force_refresh()
+            resp = requests.get(f"{settings.ebay_base_url}/buy/browse/v1/item/{item_id}",
+                headers=_get_headers(),timeout=(3, 10),)
+        
         resp.raise_for_status()
         
         item = resp.json()
