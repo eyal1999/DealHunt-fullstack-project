@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from fastapi.security import OAuth2PasswordRequestForm
 import os
 import uuid
-from PIL import Image
+from PIL import Image, ImageOps
 import io
 from bson import ObjectId
 
@@ -14,7 +14,7 @@ from app.auth.hashing import get_password_hash, verify_password
 from app.auth.jwt import create_access_token, get_current_active_user
 from app.config import settings
 from app.db import users_collection, password_reset_collection
-from app.models.db_models import Token, User, UserCreate, UserInDB
+from app.models.db_models import Token, User, UserCreate, UserInDB, NotificationPreferences
 from app.models.password_reset import PasswordResetRequest, PasswordResetConfirm, PasswordResetToken
 from app.services.email_service import email_service
 
@@ -153,7 +153,10 @@ async def upload_profile_picture(
         image_data = await file.read()
         image = Image.open(io.BytesIO(image_data))
         
-        # Resize image to 300x300 for consistency
+        # Fix orientation based on EXIF data automatically
+        image = ImageOps.exif_transpose(image)
+        
+        # Convert to RGB and resize to 300x300 for consistency
         image = image.convert('RGB')
         image = image.resize((300, 300), Image.Resampling.LANCZOS)
         
@@ -261,3 +264,28 @@ async def reset_password(request: PasswordResetConfirm):
     )
     
     return {"message": "Password reset successfully"}
+
+@router.put("/notification-preferences")
+async def update_notification_preferences(
+    preferences: NotificationPreferences,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Update user's notification preferences.
+    """
+    # Update user preferences in database
+    await users_collection.update_one(
+        {"_id": ObjectId(current_user.id)},
+        {"$set": {
+            "email_notifications": preferences.email_notifications,
+            "price_drop_notifications": preferences.price_drop_notifications
+        }}
+    )
+    
+    return {
+        "message": "Notification preferences updated successfully",
+        "preferences": {
+            "email_notifications": preferences.email_notifications,
+            "price_drop_notifications": preferences.price_drop_notifications
+        }
+    }

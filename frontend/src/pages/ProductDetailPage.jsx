@@ -9,101 +9,28 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { productService, wishlistService } from "../api/apiServices";
 import { useAuth } from "../contexts/AuthContext";
 import { useAutoWishlist } from "../hooks/useAutoWishlist";
+import { getImageUrl, getFallbackImageUrl } from "../utils/simpleImageProxy";
 
-// Enhanced hook for handling AliExpress images with CORS issues
-const useAliExpressImage = (originalSrc, fallbackSrc) => {
-  const [imageSrc, setImageSrc] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
-  const [hasError, setHasError] = useState(false);
-
-  useEffect(() => {
-    if (!originalSrc) {
-      setImageSrc(fallbackSrc || "");
-      setIsLoading(false);
-      setHasError(true);
-      return;
-    }
-
-    setIsLoading(true);
-    setHasError(false);
-
-    // For AliExpress images, we might need to handle CORS
-    testImageLoad(originalSrc)
-      .then((success) => {
-        if (success) {
-          setImageSrc(originalSrc);
-        } else {
-          setImageSrc(fallbackSrc || "");
-          setHasError(true);
-        }
-      })
-      .catch(() => {
-        setImageSrc(fallbackSrc || "");
-        setHasError(true);
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
-  }, [originalSrc, fallbackSrc]);
-
-  return { imageSrc, isLoading, hasError };
-};
-
-// Helper function to test if an image can be loaded
-const testImageLoad = (src) => {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(true);
-    img.onerror = () => reject(false);
-
-    // Add timestamp to bypass cache issues
-    img.src = src.includes("?")
-      ? `${src}&t=${Date.now()}`
-      : `${src}?t=${Date.now()}`;
-
-    // Timeout after 10 seconds
-    setTimeout(() => reject(false), 10000);
-  });
-};
-
-// Enhanced Image Component for Product Details
+// Simple Image Component for Product Details
 const ProductImage = ({
   src,
   alt,
   className = "",
-  fallbackSrc = "https://via.placeholder.com/400x300?text=Image+Not+Available",
+  fallbackSrc = null,
   showLoader = true,
 }) => {
-  const { imageSrc, isLoading, hasError } = useAliExpressImage(
-    src,
-    fallbackSrc
-  );
+  const [hasError, setHasError] = useState(false);
+  
+  // Use the simple proxy for the source
+  const imageSrc = getImageUrl(src);
+  const fallbackImageSrc = fallbackSrc ? getImageUrl(fallbackSrc) : getFallbackImageUrl();
 
-  if (isLoading && showLoader) {
-    return (
-      <div
-        className={`${className} flex items-center justify-center bg-gray-100`}
-      >
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mb-2 mx-auto"></div>
-          <span className="text-sm text-gray-500">Loading image...</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (hasError || !imageSrc) {
-    return (
-      <div
-        className={`${className} flex items-center justify-center bg-gray-100`}
-      >
-        <div className="text-center text-gray-500">
-          <div className="text-2xl mb-2">📷</div>
-          <span className="text-sm">Image unavailable</span>
-        </div>
-      </div>
-    );
-  }
+  const handleError = (e) => {
+    if (!hasError) {
+      setHasError(true);
+      e.target.src = fallbackImageSrc;
+    }
+  };
 
   return (
     <img
@@ -111,10 +38,7 @@ const ProductImage = ({
       alt={alt}
       className={className}
       loading="lazy"
-      onError={(e) => {
-        // Last resort fallback
-        e.target.src = fallbackSrc;
-      }}
+      onError={handleError}
     />
   );
 };
@@ -139,12 +63,26 @@ const ProductDescription = ({ description, title }) => {
     }
 
     // If it contains HTML, we need to be more careful
-    // Create a temporary div to parse HTML safely
-    const tempDiv = document.createElement("div");
-    tempDiv.innerHTML = description;
-
-    // Get text content only
-    let textContent = tempDiv.textContent || tempDiv.innerText || "";
+    // Safely extract text content without using innerHTML
+    let textContent = description;
+    
+    try {
+      // Remove HTML tags safely using regex instead of innerHTML
+      textContent = description
+        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '') // Remove scripts
+        .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')   // Remove styles
+        .replace(/<[^>]*>/g, '')  // Remove all HTML tags
+        .replace(/&nbsp;/g, ' ')  // Replace HTML entities
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .trim();
+    } catch (error) {
+      console.warn('Error processing description HTML:', error);
+      // Fallback to original description if processing fails
+      textContent = description.replace(/<[^>]*>/g, '').trim();
+    }
 
     // Additional cleaning for any remaining unwanted patterns
     const unwantedPatterns = [
@@ -242,22 +180,29 @@ const ProductImageSection = ({
   const processedImages = useMemo(() => {
     const images = [];
 
-    // Add main image first
-    if (product.main_image) {
-      images.push(product.main_image);
-    }
+    // Safety check: ensure product exists
+    if (!product) return images;
 
-    // Add additional images, avoiding duplicates
-    if (product.images && Array.isArray(product.images)) {
-      product.images.forEach((img) => {
-        if (img && !images.includes(img)) {
-          images.push(img);
-        }
-      });
+    try {
+      // Add main image first
+      if (product.main_image && typeof product.main_image === 'string') {
+        images.push(product.main_image);
+      }
+
+      // Add additional images, avoiding duplicates
+      if (product.images && Array.isArray(product.images)) {
+        product.images.forEach((img) => {
+          if (img && typeof img === 'string' && !images.includes(img)) {
+            images.push(img);
+          }
+        });
+      }
+    } catch (error) {
+      console.warn('Error processing product images:', error);
     }
 
     return images;
-  }, [product.main_image, product.images]);
+  }, [product?.main_image, product?.images]);
 
   // Handle thumbnail click with bounds checking
   const handleThumbnailClick = useCallback(
@@ -272,7 +217,7 @@ const ProductImageSection = ({
   return (
     <div className="lg:col-span-1">
       {/* Video/Image Toggle for AliExpress */}
-      {product.product_video_url && (
+      {product?.product_video_url && typeof product.product_video_url === 'string' && (
         <div className="mb-4 flex gap-2">
           <button
             onClick={() => setShowVideo(false)}
@@ -299,12 +244,16 @@ const ProductImageSection = ({
 
       {/* Main Image/Video Display */}
       <div className="mb-4">
-        {showVideo && product.product_video_url ? (
+        {showVideo && product?.product_video_url && typeof product.product_video_url === 'string' ? (
           <div className="w-full h-96 bg-black rounded-lg overflow-hidden">
             <video
               controls
               className="w-full h-full object-contain"
-              poster={processedImages[0] || ""}
+              poster={processedImages?.[0] || ""}
+              onError={(e) => {
+                console.warn('Video failed to load:', product.product_video_url);
+                setShowVideo(false); // Fall back to images if video fails
+              }}
             >
               <source src={product.product_video_url} type="video/mp4" />
               Your browser does not support the video tag.
@@ -314,8 +263,8 @@ const ProductImageSection = ({
           <div className="w-full h-96 bg-gray-100 rounded-lg overflow-hidden">
             {processedImages.length > 0 ? (
               <ProductImage
-                src={processedImages[activeImage] || processedImages[0]}
-                alt={product.title}
+                src={processedImages[Math.min(activeImage, processedImages.length - 1)] || processedImages[0]}
+                alt={product?.title || 'Product image'}
                 className="w-full h-full object-contain cursor-zoom-in"
               />
             ) : (
@@ -823,6 +772,7 @@ const ProductDetailPage = () => {
       </div>
     );
   }
+
 
   // Main render
   return (

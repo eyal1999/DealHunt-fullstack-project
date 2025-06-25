@@ -5,10 +5,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from motor.motor_asyncio import AsyncIOMotorClient
 from contextlib import asynccontextmanager
+import asyncio
 
 import logging
 
-from app.routers import search, auth, wishlist, google_auth  # Add google_auth import
+from app.routers import search, auth, wishlist, google_auth, admin, images  # Add images import
+from app.services.price_monitor import price_monitor
 from .config import settings
 
 # Configure logging
@@ -25,9 +27,27 @@ async def lifespan(app: FastAPI):
     logger.info("Starting up...")
     logger.info(f"Database name: {settings.db_name}")
     await connect_to_mongo()
+    
+    # Start price monitoring as a background task
+    logger.info("Starting price monitoring service...")
+    price_monitoring_task = asyncio.create_task(price_monitor.start_monitoring())
+    app.price_monitoring_task = price_monitoring_task
+    
     yield
+    
     # Shutdown
     logger.info("Shutting down...")
+    
+    # Stop price monitoring
+    logger.info("Stopping price monitoring service...")
+    price_monitor.stop_monitoring()
+    if hasattr(app, 'price_monitoring_task'):
+        app.price_monitoring_task.cancel()
+        try:
+            await app.price_monitoring_task
+        except asyncio.CancelledError:
+            logger.info("Price monitoring task cancelled")
+    
     await close_mongo_connection()
 
 app = FastAPI(
@@ -51,6 +71,8 @@ app.include_router(search.router)
 app.include_router(auth.router)
 app.include_router(google_auth.router)  # Add Google auth router
 app.include_router(wishlist.router)
+app.include_router(admin.router)  # Add admin router
+app.include_router(images.router)  # Add images router
 
 # Mount static files for profile pictures
 import os

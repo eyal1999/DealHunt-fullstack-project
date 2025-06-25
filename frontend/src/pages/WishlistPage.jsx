@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import ProductCard from "../components/product/ProductCard";
-import { wishlistService } from "../api/apiServices";
+import { wishlistService, authService } from "../api/apiServices";
 import { useAuth } from "../contexts/AuthContext";
 
 const WishlistPage = () => {
@@ -13,6 +13,12 @@ const WishlistPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [removingItems, setRemovingItems] = useState(new Set());
+  
+  // Notification preferences state
+  const [priceDropNotifications, setPriceDropNotifications] = useState(
+    currentUser?.price_drop_notifications ?? true
+  );
+  const [isUpdatingNotifications, setIsUpdatingNotifications] = useState(false);
 
   // Fetch wishlist items from the real API
   const fetchWishlist = useCallback(async () => {
@@ -77,6 +83,13 @@ const WishlistPage = () => {
   useEffect(() => {
     fetchWishlist();
   }, [fetchWishlist]);
+
+  // Update notification preference when currentUser changes
+  useEffect(() => {
+    if (currentUser?.price_drop_notifications !== undefined) {
+      setPriceDropNotifications(currentUser.price_drop_notifications);
+    }
+  }, [currentUser]);
 
   // Enhanced remove function with better validation
   const handleRemoveItem = useCallback(
@@ -206,6 +219,27 @@ const WishlistPage = () => {
     fetchWishlist();
   }, [fetchWishlist]);
 
+  // Handle notification preferences toggle
+  const handleNotificationToggle = useCallback(async () => {
+    try {
+      setIsUpdatingNotifications(true);
+      
+      const newValue = !priceDropNotifications;
+      
+      await authService.updateNotificationPreferences({
+        email_notifications: true, // Keep email notifications enabled
+        price_drop_notifications: newValue
+      });
+      
+      setPriceDropNotifications(newValue);
+    } catch (error) {
+      console.error("Error updating notification preferences:", error);
+      alert("Failed to update notification preferences. Please try again.");
+    } finally {
+      setIsUpdatingNotifications(false);
+    }
+  }, [priceDropNotifications]);
+
   // Redirect to login if not authenticated
   if (!isAuthenticated) {
     return (
@@ -326,6 +360,56 @@ const WishlistPage = () => {
           </svg>
           Refresh
         </button>
+      </div>
+
+      {/* Price Drop Notification Toggle */}
+      <div className="bg-white rounded-lg shadow-md p-4 mb-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center">
+            <svg
+              className="w-5 h-5 text-blue-500 mr-2"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+              />
+            </svg>
+            <div>
+              <h3 className="font-medium text-gray-900">Email Notifications</h3>
+              <p className="text-sm text-gray-600">
+                Get notified when prices drop for items in your wishlist
+              </p>
+            </div>
+          </div>
+          
+          <button
+            onClick={handleNotificationToggle}
+            disabled={isUpdatingNotifications}
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+              priceDropNotifications ? "bg-blue-600" : "bg-gray-200"
+            } ${isUpdatingNotifications ? "opacity-50 cursor-not-allowed" : ""}`}
+            role="switch"
+            aria-checked={priceDropNotifications}
+            title={`${priceDropNotifications ? "Disable" : "Enable"} price drop notifications`}
+          >
+            <span
+              aria-hidden="true"
+              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                priceDropNotifications ? "translate-x-5" : "translate-x-0"
+              }`}
+            />
+            {isUpdatingNotifications && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="animate-spin h-3 w-3 border border-gray-400 border-t-transparent rounded-full"></div>
+              </div>
+            )}
+          </button>
+        </div>
       </div>
 
       {wishlistItems.length > 0 ? (

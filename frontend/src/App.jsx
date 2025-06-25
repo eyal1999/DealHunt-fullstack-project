@@ -12,6 +12,7 @@ import TermsPage from "./pages/TermsPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
+import ErrorBoundary from "./components/common/ErrorBoundary";
 
 // Loading component for initial auth check
 const LoadingScreen = () => (
@@ -41,7 +42,11 @@ const AppContent = () => {
           <Route path="search" element={<SearchResultsPage />} />
           <Route
             path="product/:marketplace/:id"
-            element={<ProductDetailPage />}
+            element={
+              <ErrorBoundary>
+                <ProductDetailPage />
+              </ErrorBoundary>
+            }
           />
           <Route path="login" element={<LoginPage />} />
           <Route path="register" element={<RegisterPage />} />

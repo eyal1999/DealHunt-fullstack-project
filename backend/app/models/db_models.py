@@ -61,6 +61,10 @@ class UserInDB(BaseModel):
     is_active: bool = True
     created_at: datetime = Field(default_factory=datetime.utcnow)
     last_login: Optional[datetime] = None
+    
+    # Email notification preferences
+    email_notifications: bool = True
+    price_drop_notifications: bool = True
 
 class User(BaseModel):
     """Model for user data returned to client (public data only)."""
@@ -72,6 +76,8 @@ class User(BaseModel):
     is_active: bool
     created_at: datetime
     last_login: Optional[datetime] = None
+    email_notifications: bool = True
+    price_drop_notifications: bool = True
 
 class Token(BaseModel):
     """Model for authentication token response."""
@@ -109,3 +115,14 @@ class WishlistItemOut(BaseModel):
     detail_url: str
     affiliate_link: str
     added_at: datetime
+    
+    # Price tracking for notifications
+    last_checked_price: Optional[float] = None
+    price_history: List[Dict[str, Any]] = Field(default_factory=list)
+
+# ── Notification Models ────────────────────────────────────────
+
+class NotificationPreferences(BaseModel):
+    """Model for updating notification preferences."""
+    email_notifications: bool
+    price_drop_notifications: bool

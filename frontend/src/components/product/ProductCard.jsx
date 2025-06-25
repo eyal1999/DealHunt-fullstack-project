@@ -2,6 +2,7 @@ import React, { useState, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { wishlistService } from "../../api/apiServices";
+import { getImageUrl, getFallbackImageUrl } from "../../utils/simpleImageProxy";
 
 const ProductCard = ({ product }) => {
   const { isAuthenticated } = useAuth();
@@ -150,16 +151,12 @@ const ProductCard = ({ product }) => {
         {/* Product Image */}
         <div className="relative h-48 overflow-hidden">
           <img
-            src={
-              product.image ||
-              "https://via.placeholder.com/300x200?text=No+Image"
-            }
+            src={getImageUrl(product.image)}
             alt={product.title}
             className="w-full h-full object-cover"
             loading="lazy"
             onError={(e) => {
-              e.target.src =
-                "https://via.placeholder.com/300x200?text=Image+Not+Available";
+              e.target.src = getFallbackImageUrl();
             }}
           />
 

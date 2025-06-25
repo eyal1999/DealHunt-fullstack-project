@@ -347,6 +347,40 @@ const authService = {
   isAuthenticated: () => {
     return authService.getStorage("token") !== null;
   },
+
+  /**
+   * Update user notification preferences
+   * @param {Object} preferences - Notification preferences object
+   * @returns {Promise} - Promise that resolves to updated preferences
+   */
+  updateNotificationPreferences: async (preferences) => {
+    try {
+      const token = authService.getStorage("token");
+
+      if (!token) {
+        throw new Error("No authentication token found");
+      }
+
+      const response = await fetch(`${api.baseURL}/auth/notification-preferences`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(preferences),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Failed to update notification preferences");
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Update notification preferences error:", error);
+      throw error;
+    }
+  },
 };
 
 export default authService;

@@ -13,6 +13,8 @@ const ProfilePage = () => {
 
   const fileInputRef = useRef(null);
   const [isUploadingPicture, setIsUploadingPicture] = useState(false);
+  const [previewImage, setPreviewImage] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(null);
 
   const [passwordData, setPasswordData] = useState({
     currentPassword: "",
@@ -24,11 +26,19 @@ const ProfilePage = () => {
   const [successMessage, setSuccessMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  // Get profile picture URL
+  // Get profile picture URL (preview or current)
   const getProfilePictureUrl = () => {
+    // Show preview if available
+    if (previewImage) {
+      return previewImage;
+    }
+    
+    // Show current user picture
     if (currentUser?.picture_url) {
       return profileService.getProfilePictureUrl(currentUser.picture_url);
     }
+    
+    // Show default avatar
     return profileService.getDefaultAvatar(currentUser?.full_name || 'User');
   };
 
@@ -125,15 +135,39 @@ const ProfilePage = () => {
     }
 
     setIsLoading(true);
+    setErrors({});
 
-    // In a real app, you would call your update profile API
-    // For now, we'll just simulate the API call
-    setTimeout(() => {
+    try {
+      // Upload profile picture if one was selected
+      if (selectedFile) {
+        setIsUploadingPicture(true);
+        await profileService.uploadProfilePicture(selectedFile);
+        setSelectedFile(null);
+        setPreviewImage(null);
+        setIsUploadingPicture(false);
+      }
+
+      // Here you would also update other profile data (name, email)
+      // For now, we'll just simulate the API call
+      setSuccessMessage("Profile updated successfully!");
+      
+      // Force auth context to refresh user data if image was uploaded
+      if (selectedFile) {
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      }
+      
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      
+    } catch (error) {
+      setErrors({ general: error.message || 'Failed to update profile' });
+    } finally {
       setIsLoading(false);
-      setSuccessMessage("Profile updated successfully");
-
-      // In a real app, you would update the currentUser in auth context
-    }, 1000);
+    }
   };
 
   // Handle password update
@@ -161,8 +195,8 @@ const ProfilePage = () => {
     }, 1000);
   };
 
-  // Handle profile picture upload
-  const handleProfilePictureChange = async (event) => {
+  // Handle profile picture selection (preview only)
+  const handleProfilePictureChange = (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
@@ -178,29 +212,36 @@ const ProfilePage = () => {
       return;
     }
 
-    setIsUploadingPicture(true);
+    // Clear errors and create preview
     setErrors({});
-
-    try {
-      const response = await profileService.uploadProfilePicture(file);
-      setSuccessMessage('Profile picture updated successfully!');
-      
-      // Force auth context to refresh user data
-      window.location.reload(); // Simple approach - you could also update auth context
-    } catch (error) {
-      setErrors({ profilePicture: error.message || 'Failed to upload image' });
-    } finally {
-      setIsUploadingPicture(false);
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+    setSelectedFile(file);
+    
+    // Create preview URL
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setPreviewImage(e.target.result);
+    };
+    reader.readAsDataURL(file);
+    
+    // Clear success message when new file is selected
+    if (successMessage) {
+      setSuccessMessage("");
     }
   };
 
   // Trigger file input click
   const handleChangePhotoClick = () => {
     fileInputRef.current?.click();
+  };
+
+  // Cancel photo selection
+  const handleCancelPhotoSelection = () => {
+    setSelectedFile(null);
+    setPreviewImage(null);
+    setErrors({});
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   return (
@@ -264,6 +305,11 @@ const ProfilePage = () => {
                         <div className="text-white text-xs">Uploading...</div>
                       </div>
                     )}
+                    {previewImage && (
+                      <div className="absolute -bottom-1 -right-1 bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">
+                        ✓
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div>
@@ -277,8 +323,22 @@ const ProfilePage = () => {
                       disabled={isUploadingPicture}
                       className="text-primary text-sm hover:underline disabled:opacity-50"
                     >
-                      {isUploadingPicture ? 'Uploading...' : 'Change profile photo'}
+                      {selectedFile ? 'Choose different photo' : 'Change profile photo'}
                     </button>
+                    {selectedFile && (
+                      <div className="mt-2">
+                        <p className="text-sm text-gray-600">
+                          📁 {selectedFile.name} selected
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleCancelPhotoSelection}
+                          className="text-red-500 text-xs hover:underline mt-1"
+                        >
+                          Cancel selection
+                        </button>
+                      </div>
+                    )}
                     <input
                       ref={fileInputRef}
                       type="file"
@@ -351,14 +411,14 @@ const ProfilePage = () => {
                   <div className="flex justify-end">
                     <button
                       type="submit"
-                      disabled={isLoading}
+                      disabled={isLoading || isUploadingPicture}
                       className={`bg-primary text-white px-6 py-2 rounded font-medium ${
-                        isLoading
+                        isLoading || isUploadingPicture
                           ? "opacity-70 cursor-not-allowed"
                           : "hover:bg-blue-700"
                       }`}
                     >
-                      {isLoading ? "Saving..." : "Save Changes"}
+                      {isUploadingPicture ? "Uploading image..." : isLoading ? "Saving..." : "Save Changes"}
                     </button>
                   </div>
                 </div>

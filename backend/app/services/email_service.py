@@ -126,5 +126,64 @@ class EmailService:
             print(f"🔗 Reset Link: {reset_link}")
             return True  # Return True for development to continue the flow
 
+    async def send_price_drop_notification(self, email: str, items: list, frontend_url: str = "http://localhost:3000"):
+        """Send price drop notification email to user."""
+        wishlist_link = f"{frontend_url}/wishlist"
+        total_savings = sum(item.get('savings', 0) for item in items)
+        
+        items_html = ""
+        for item in items:
+            savings_percent = ((item['old_price'] - item['new_price']) / item['old_price']) * 100
+            items_html += f"""
+                <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin: 15px 0;">
+                    <h3 style="margin: 0 0 10px 0;">{item['title']}</h3>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="text-decoration: line-through; color: #9ca3af;">${item['old_price']:.2f}</span>
+                        <span style="color: #dc2626; font-weight: bold; font-size: 18px;">${item['new_price']:.2f}</span>
+                        <span style="background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 12px;">-{savings_percent:.0f}%</span>
+                    </div>
+                    <p style="color: #059669; font-weight: bold;">💰 You save ${item['savings']:.2f}!</p>
+                </div>
+            """
+        
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <body style="font-family: Arial; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: white; padding: 25px; text-align: center; border-radius: 8px 8px 0 0;">
+                <h1>📉 Price Drop Alert!</h1>
+                <p>Items in your wishlist are now cheaper</p>
+            </div>
+            <div style="background-color: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px;">
+                <div style="background: #10b981; color: white; padding: 15px; border-radius: 8px; text-align: center; margin: 20px 0; font-weight: bold;">
+                    🎉 Total Savings: ${total_savings:.2f}
+                </div>
+                <p>Great news! {len(items)} item{'s' if len(items) > 1 else ''} from your wishlist {'have' if len(items) > 1 else 'has'} dropped in price:</p>
+                {items_html}
+                <p style="text-align: center;">
+                    <a href="{wishlist_link}" style="background: #059669; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">View Wishlist 🛍️</a>
+                </p>
+            </div>
+        </body>
+        </html>
+        """
+        
+        message = MessageSchema(
+            subject=f"💰 Price Drop Alert: Save ${total_savings:.2f}",
+            recipients=[email],
+            body=html_content,
+            subtype="html"
+        )
+        
+        try:
+            await self.fastmail.send_message(message)
+            return True
+        except Exception as e:
+            print(f"📧 SIMULATED PRICE DROP EMAIL TO: {email}")
+            print(f"💰 Total Savings: ${total_savings:.2f}")
+            for item in items:
+                print(f"   📦 {item['title']}: ${item['old_price']:.2f} → ${item['new_price']:.2f}")
+            return True
+
 # Global email service instance
 email_service = EmailService()
