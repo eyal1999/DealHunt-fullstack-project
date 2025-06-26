@@ -14,22 +14,22 @@ const HomePage = () => {
   useEffect(() => {
     const fetchFeaturedProducts = async () => {
       try {
-        setIsLoading(true);
         setError(null);
         
         const response = await productService.getFeaturedProducts(6);
         setFeaturedProducts(response.products);
+        setIsLoading(false); // Only set loading false after successful fetch
       } catch (err) {
         console.error("Error fetching featured products:", err);
         setError("Failed to load featured products. Please try again later.");
         
         // Fallback to empty array so the UI doesn't break
         setFeaturedProducts([]);
-      } finally {
         setIsLoading(false);
       }
     };
 
+    // Start loading immediately
     fetchFeaturedProducts();
   }, []);
 
@@ -47,6 +47,11 @@ const HomePage = () => {
       try {
         setIsLoading(true);
         setError(null);
+        
+        // Clear cache to force fresh data on retry
+        const cacheKey = 'featured_products_6';
+        localStorage.removeItem(cacheKey);
+        localStorage.removeItem(`${cacheKey}_timestamp`);
         
         const response = await productService.getFeaturedProducts(6);
         setFeaturedProducts(response.products);
@@ -142,13 +147,13 @@ const HomePage = () => {
             {[...Array(6)].map((_, index) => (
               <div
                 key={index}
-                className="bg-white rounded-lg shadow-md overflow-hidden animate-pulse"
+                className="bg-white rounded-lg shadow-md overflow-hidden"
               >
-                <div className="h-48 bg-gray-200"></div>
-                <div className="p-4">
-                  <div className="h-4 bg-gray-200 rounded mb-2"></div>
-                  <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-                  <div className="h-6 bg-gray-200 rounded w-1/2"></div>
+                <div className="h-48 bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 animate-pulse"></div>
+                <div className="p-4 space-y-3">
+                  <div className="h-4 bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 rounded animate-pulse"></div>
+                  <div className="h-4 bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 rounded w-3/4 animate-pulse"></div>
+                  <div className="h-6 bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 rounded w-1/2 animate-pulse"></div>
                 </div>
               </div>
             ))}

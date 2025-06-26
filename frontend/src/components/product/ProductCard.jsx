@@ -142,18 +142,18 @@ const ProductCard = ({ product }) => {
   );
 
   return (
-    <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+    <div className="bg-white rounded-lg shadow-md overflow-hidden transform transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:-translate-y-1">
       {/* Product Link - Wraps the clickable area */}
       <Link
         to={`/product/${product.marketplace}/${product.product_id}`}
         className="block"
       >
         {/* Product Image */}
-        <div className="relative h-48 overflow-hidden">
+        <div className="relative h-48 overflow-hidden bg-white">
           <img
             src={getImageUrl(product.image)}
             alt={product.title}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-scale-down transform transition-transform duration-300 hover:scale-105"
             loading="lazy"
             onError={(e) => {
               e.target.src = getFallbackImageUrl();

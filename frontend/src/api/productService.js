@@ -54,34 +54,55 @@ const productService = {
    */
   getFeaturedProducts: async (limit = 6) => {
     try {
-      // Use popular search terms to get "featured" products
-      const featuredSearches = [
-        'wireless earbuds',
-        'smart watch', 
-        'bluetooth speaker',
-        'phone case',
-        'laptop stand',
-        'wireless charger'
-      ];
+      // Check cache first (5 minute cache)
+      const cacheKey = `featured_products_${limit}`;
+      const cachedData = localStorage.getItem(cacheKey);
+      const cacheTimestamp = localStorage.getItem(`${cacheKey}_timestamp`);
       
-      // Pick a random search term to get varied results
-      const randomSearch = featuredSearches[Math.floor(Math.random() * featuredSearches.length)];
+      if (cachedData && cacheTimestamp) {
+        const now = Date.now();
+        const cacheAge = now - parseInt(cacheTimestamp);
+        const cacheExpiry = 5 * 60 * 1000; // 5 minutes
+        
+        if (cacheAge < cacheExpiry) {
+          console.log('Using cached featured products');
+          return JSON.parse(cachedData);
+        }
+      }
+
+      // Use a consistent, popular search term for better caching at API level
+      const searchTerm = 'electronics'; // Popular, broad category
       
       // Search for products and get first page with limited results
       const response = await api.get("/search", {
-        q: randomSearch,
-        sort: "price_low",
+        q: searchTerm,
+        sort: "sold_high", // Get most popular items
         page: 1,
         page_size: limit,
       });
 
-      return {
+      const result = {
         success: true,
         products: response.results || [],
-        searchTerm: randomSearch
+        searchTerm: searchTerm
       };
+
+      // Cache the result
+      localStorage.setItem(cacheKey, JSON.stringify(result));
+      localStorage.setItem(`${cacheKey}_timestamp`, Date.now().toString());
+
+      return result;
     } catch (error) {
       console.error("Error fetching featured products:", error);
+      
+      // Try to return cached data even if expired
+      const cacheKey = `featured_products_${limit}`;
+      const cachedData = localStorage.getItem(cacheKey);
+      if (cachedData) {
+        console.log('Using expired cache as fallback');
+        return JSON.parse(cachedData);
+      }
+      
       throw error;
     }
   },
