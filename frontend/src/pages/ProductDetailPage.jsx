@@ -874,6 +874,15 @@ const ProductDetailPage = () => {
                   </>
                 )}
             </div>
+
+            {/* Sold Count */}
+            {product.sold_count && product.sold_count > 0 && (
+              <div className="flex items-center text-gray-600 text-sm">
+                <span className="font-medium">
+                  {product.sold_count.toLocaleString()} sold
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Wishlist Message Display */}

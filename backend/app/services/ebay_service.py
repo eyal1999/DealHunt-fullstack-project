@@ -167,7 +167,14 @@ def search_products_ebay(query: str) -> List[dict]:
                 params={"q": query},headers=_get_headers(),timeout=(3, 10),)
         
         resp.raise_for_status()
-        items = resp.json().get("itemSummaries", [])
+        response_data = resp.json()
+        items = response_data.get("itemSummaries", [])
+        
+        # Debug logging to see eBay API response structure
+        print(f"🔍 eBay API Response Keys: {list(response_data.keys())}")
+        if items:
+            print(f"🔍 eBay First Item Keys: {list(items[0].keys())}")
+            print(f"🔍 eBay First Item Sample: {items[0]}")
         
         results = []
         for i in items:
@@ -179,6 +186,16 @@ def search_products_ebay(query: str) -> List[dict]:
             affiliate_link = i.get("itemAffiliateWebUrl", i["itemWebUrl"])
             affiliate_link = affiliate_link if affiliate_link and affiliate_link.strip() else None
             
+            # Extract sold count - try multiple possible field names
+            sold_count = 0
+            for field in ["quantitySold", "soldQuantity", "totalSold", "salesCount", "soldCount"]:
+                if field in i and i[field] is not None:
+                    try:
+                        sold_count = int(i[field])
+                        break
+                    except (ValueError, TypeError):
+                        continue
+            
             try:
                 product = ProductSummary(
                     product_id=i["itemId"],
@@ -189,6 +206,7 @@ def search_products_ebay(query: str) -> List[dict]:
                     detail_url=i["itemWebUrl"],
                     affiliate_link=affiliate_link,
                     marketplace="ebay",
+                    sold_count=sold_count,
                 )
                 results.append(product.model_dump())
             except Exception as validation_error:
@@ -317,6 +335,16 @@ def fetch_product_detail_ebay(item_id: str) -> dict:
         # Filter out empty image URLs from all_images list
         filtered_images = [img for img in all_images if img and img.strip()]
         
+        # Extract sold count - try multiple possible field names
+        sold_count = 0
+        for field in ["quantitySold", "soldQuantity", "totalSold", "salesCount", "soldCount"]:
+            if field in item and item[field] is not None:
+                try:
+                    sold_count = int(item[field])
+                    break
+                except (ValueError, TypeError):
+                    continue
+        
         return ProductDetail(
             product_id=item["itemId"],
             title=item["title"],
@@ -339,7 +367,8 @@ def fetch_product_detail_ebay(item_id: str) -> dict:
             specifications=specifications,
             return_policy=return_policy,
             item_creation_date=item.get("itemCreationDate", ""),
-            top_rated_seller=item.get("topRatedBuyingExperience", False)
+            top_rated_seller=item.get("topRatedBuyingExperience", False),
+            sold_count=sold_count
         ).model_dump()
         
     except Exception as e:

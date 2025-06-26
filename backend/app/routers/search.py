@@ -7,7 +7,7 @@ from app.errors import AliexpressError, EbayError
 
 router = APIRouter(prefix="/search", tags=["Search"])
 
-VALID_SORT = {"price_low", "price_high"}
+VALID_SORT = {"price_low", "price_high", "sold_high"}
 VALID_MARKETPLACES = {"aliexpress", "ebay"}
 
 def _sort_results(items: List[dict], mode: str) -> List[dict]:
@@ -16,6 +16,8 @@ def _sort_results(items: List[dict], mode: str) -> List[dict]:
         return sorted(items, key=lambda x: x.get("sale_price", float("inf")))
     if mode == "price_high":
         return sorted(items, key=lambda x: x.get("sale_price", 0), reverse=True)
+    if mode == "sold_high":
+        return sorted(items, key=lambda x: x.get("sold_count") or 0, reverse=True)
     return items
 
 def _paginate_results(items: List[dict], page: int, page_size: int) -> dict:
@@ -63,7 +65,7 @@ def _paginate_results(items: List[dict], page: int, page_size: int) -> dict:
 @router.get("/", response_model=SearchResponse)
 def search_products(
     q: str = Query(..., min_length=1, description="Search query"),
-    sort: str = Query("price_low", description="Sort order: price_low | price_high"),
+    sort: str = Query("price_low", description="Sort order: price_low | price_high | sold_high"),
     page: int = Query(1, ge=1, description="Page number (starts from 1)"),
     page_size: int = Query(12, ge=1, le=50, description="Items per page (1-50)")
 ):

@@ -424,6 +424,7 @@ const SearchResultsPage = () => {
               >
                 <option value="price_low">Price: Low to High</option>
                 <option value="price_high">Price: High to Low</option>
+                <option value="sold_high">Most Sold</option>
               </select>
             </div>
           </div>

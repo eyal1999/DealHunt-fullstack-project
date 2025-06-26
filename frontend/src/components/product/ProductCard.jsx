@@ -219,6 +219,13 @@ const ProductCard = ({ product }) => {
               </span>
             </div>
           )}
+
+          {/* Sold Count */}
+          {product.sold_count && product.sold_count > 0 && (
+            <div className="text-gray-500 text-xs mb-2">
+              {product.sold_count.toLocaleString()} sold
+            </div>
+          )}
         </div>
       </Link>
 
