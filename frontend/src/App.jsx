@@ -13,6 +13,7 @@ import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import ErrorBoundary from "./components/common/ErrorBoundary";
+import InstallBanner from "./components/pwa/InstallBanner";
 
 // Loading component for initial auth check
 const LoadingScreen = () => (
@@ -63,6 +64,9 @@ const AppContent = () => {
           </Route>
         </Route>
       </Routes>
+      
+      {/* PWA Install Banner */}
+      <InstallBanner />
     </BrowserRouter>
   );
 };

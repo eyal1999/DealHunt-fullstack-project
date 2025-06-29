@@ -9,7 +9,7 @@ import asyncio
 
 import logging
 
-from app.routers import search, auth, wishlist, google_auth, admin, images  # Add images import
+from app.routers import search, auth, wishlist, google_auth, admin, images, price_tracking, user_activity, enhanced_wishlist, recommendations, social, realtime_notifications, analytics, internationalization, deal_hunting, user_management
 from app.services.price_monitor import price_monitor
 from .config import settings
 
@@ -73,6 +73,16 @@ app.include_router(google_auth.router)  # Add Google auth router
 app.include_router(wishlist.router)
 app.include_router(admin.router)  # Add admin router
 app.include_router(images.router)  # Add images router
+app.include_router(price_tracking.router)  # Add price tracking router
+app.include_router(user_activity.router)  # Add user activity router
+app.include_router(enhanced_wishlist.router)  # Add enhanced wishlist router
+app.include_router(recommendations.router)  # Add AI recommendations router
+app.include_router(social.router)  # Add social features router
+app.include_router(realtime_notifications.router)  # Add real-time notifications router
+app.include_router(analytics.router)  # Add analytics and dashboard router
+app.include_router(internationalization.router)  # Add internationalization and multi-currency router
+app.include_router(deal_hunting.router)  # Add automated deal hunting and alerts router
+app.include_router(user_management.router)  # Add advanced user management and roles router
 
 # Mount static files for profile pictures
 import os
