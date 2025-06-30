@@ -77,7 +77,6 @@ const RecentlyViewedProducts = ({ limit = 10, showTitle = true }) => {
       'aliexpress': 'bg-red-100 text-red-800',
       'ebay': 'bg-yellow-100 text-yellow-800',
       'walmart': 'bg-blue-100 text-blue-800',
-      'amazon': 'bg-orange-100 text-orange-800'
     };
     return colors[marketplace.toLowerCase()] || 'bg-gray-100 text-gray-800';
   };

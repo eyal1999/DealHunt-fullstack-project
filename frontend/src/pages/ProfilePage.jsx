@@ -1,6 +1,7 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import profileService from "../api/profileService";
+import { initProfilePageAnimations } from "../utils/scrollReveal";
 
 const ProfilePage = () => {
   const { currentUser } = useAuth();
@@ -25,6 +26,11 @@ const ProfilePage = () => {
   const [errors, setErrors] = useState({});
   const [successMessage, setSuccessMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  // Initialize profile page animations
+  useEffect(() => {
+    initProfilePageAnimations();
+  }, []);
 
   // Get profile picture URL (preview or current)
   const getProfilePictureUrl = () => {
@@ -246,7 +252,7 @@ const ProfilePage = () => {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6">My Account</h1>
+      <h1 className="profile-header text-3xl font-bold mb-6">My Account</h1>
 
       {errors.general && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
@@ -260,9 +266,9 @@ const ProfilePage = () => {
         </div>
       )}
 
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
+      <div className="profile-card bg-white rounded-lg shadow-md overflow-hidden">
         {/* Tabs */}
-        <div className="flex border-b">
+        <div className="profile-tabs flex border-b">
           <button
             className={`px-6 py-4 text-sm font-medium ${
               activeTab === "profile"
@@ -285,13 +291,13 @@ const ProfilePage = () => {
           </button>
         </div>
 
-        <div className="p-6">
+        <div className="profile-content p-6">
           {/* Profile Information */}
           {activeTab === "profile" && (
             <div>
-              <div className="flex flex-col sm:flex-row items-start sm:items-center mb-6">
+              <div className="profile-picture-section flex flex-col sm:flex-row items-start sm:items-center mb-6">
                 <div className="mb-4 sm:mb-0 sm:mr-6">
-                  <div className="w-24 h-24 rounded-full overflow-hidden bg-gray-200 relative">
+                  <div className="profile-picture w-24 h-24 rounded-full overflow-hidden bg-gray-200 relative">
                     <img
                       src={getProfilePictureUrl()}
                       alt="Profile"

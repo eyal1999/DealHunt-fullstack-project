@@ -21,7 +21,7 @@ const PreferenceSettings = ({ userProfile, onClose, onUpdate }) => {
   ]);
   
   const [marketplaces] = useState([
-    'aliexpress', 'ebay', 'walmart', 'amazon'
+    'aliexpress', 'ebay', 'walmart'
   ]);
 
   useEffect(() => {
@@ -117,7 +117,6 @@ const PreferenceSettings = ({ userProfile, onClose, onUpdate }) => {
       'aliexpress': 'text-red-600',
       'ebay': 'text-yellow-600',
       'walmart': 'text-blue-600',
-      'amazon': 'text-orange-600'
     };
     return colors[marketplace] || 'text-gray-600';
   };

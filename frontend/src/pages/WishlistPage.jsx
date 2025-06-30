@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import ProductCard from "../components/product/ProductCard";
 import { wishlistService, authService } from "../api/apiServices";
 import { useAuth } from "../contexts/AuthContext";
+import { initWishlistPageAnimations } from "../utils/scrollReveal";
 
 const WishlistPage = () => {
   const { isAuthenticated, currentUser } = useAuth();
@@ -84,6 +85,18 @@ const WishlistPage = () => {
     fetchWishlist();
   }, [fetchWishlist]);
 
+  // Initialize wishlist page animations after content is ready
+  useEffect(() => {
+    if (isAuthenticated && !isLoading) {
+      // Small delay to ensure DOM is rendered
+      const timer = setTimeout(() => {
+        initWishlistPageAnimations();
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isAuthenticated, isLoading, wishlistItems.length]);
+
   // Update notification preference when currentUser changes
   useEffect(() => {
     if (currentUser?.price_drop_notifications !== undefined) {
@@ -146,6 +159,11 @@ const WishlistPage = () => {
           );
           return newItems;
         });
+
+        // Optional: Refresh the wishlist after a short delay to ensure backend consistency
+        setTimeout(() => {
+          fetchWishlist();
+        }, 1000);
 
         console.log("✅ Item removed successfully from UI");
       } catch (error) {
@@ -335,7 +353,7 @@ const WishlistPage = () => {
   // Main render
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
+      <div className="wishlist-header flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold">My Wishlist</h1>
 
         {/* Refresh button */}
@@ -363,7 +381,7 @@ const WishlistPage = () => {
       </div>
 
       {/* Price Drop Notification Toggle */}
-      <div className="bg-white rounded-lg shadow-md p-4 mb-6">
+      <div className="notification-settings bg-white rounded-lg shadow-md p-4 mb-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center">
             <svg
@@ -415,27 +433,22 @@ const WishlistPage = () => {
       {wishlistItems.length > 0 ? (
         <div>
           {/* Wishlist summary */}
-          <div className="bg-white rounded-lg shadow-md p-4 mb-6">
-            <div className="flex items-center justify-between">
-              <p className="text-gray-600">
-                {wishlistItems.length}{" "}
-                {wishlistItems.length === 1 ? "item" : "items"} saved to your
-                wishlist
-              </p>
-              <p className="text-sm text-gray-500">
-                Click the ❌ button to remove items
-              </p>
-            </div>
+          <div className="wishlist-summary bg-white rounded-lg shadow-md p-4 mb-6">
+            <p className="text-gray-600">
+              {wishlistItems.length}{" "}
+              {wishlistItems.length === 1 ? "item" : "items"} saved to your
+              wishlist
+            </p>
           </div>
 
           {/* Wishlist grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="wishlist-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {wishlistItems.map((item) => {
               const isRemoving = removingItems.has(item.id);
               const productCardData = transformWishlistItemForProductCard(item);
 
               return (
-                <div key={item.id} className="relative">
+                <div key={item.id} className="wishlist-item relative">
                   {/* Removing overlay */}
                   {isRemoving && (
                     <div className="absolute inset-0 bg-white bg-opacity-75 z-10 flex items-center justify-center rounded-lg">
@@ -448,35 +461,28 @@ const WishlistPage = () => {
                     </div>
                   )}
 
-                  {/* Product Card */}
-                  <ProductCard product={productCardData} />
-
-                  {/* Remove button overlay */}
-                  <button
-                    onClick={() => handleRemoveItem(item)}
-                    disabled={isRemoving}
-                    className={`absolute top-2 right-2 bg-white rounded-full p-1 shadow transition-colors ${
-                      isRemoving
-                        ? "opacity-50 cursor-not-allowed"
-                        : "hover:bg-red-50"
-                    }`}
-                    title="Remove from wishlist"
-                  >
-                    <svg
-                      className="w-5 h-5 text-red-500"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  </button>
+                  {/* Product Card with custom remove button */}
+                  <ProductCard 
+                    product={productCardData} 
+                    isWishlistContext={true}
+                    customButton={
+                      <button
+                        onClick={() => handleRemoveItem(item)}
+                        disabled={isRemoving}
+                        className={`bg-red-500 text-white px-3 py-2 rounded text-sm transition-colors ${
+                          isRemoving
+                            ? "opacity-50 cursor-not-allowed"
+                            : "hover:bg-red-600"
+                        }`}
+                        title="Remove from wishlist"
+                      >
+                        {isRemoving ? "Removing..." : "Remove Item"}
+                      </button>
+                    }
+                  />
 
                   {/* Added date */}
-                  <div className="absolute bottom-0 left-0 right-0 bg-white bg-opacity-90 text-xs py-1 px-2 text-gray-500 rounded-b-lg">
+                  <div className="absolute -bottom-6 left-0 right-0 bg-white bg-opacity-90 text-xs py-1 px-2 text-gray-500 text-center rounded-b-lg">
                     Added on {formatDate(item.added_at)}
                   </div>
                 </div>
@@ -486,7 +492,7 @@ const WishlistPage = () => {
         </div>
       ) : (
         /* Empty state */
-        <div className="bg-white rounded-lg shadow-md p-8 text-center">
+        <div className="empty-wishlist bg-white rounded-lg shadow-md p-8 text-center">
           <svg
             className="w-16 h-16 text-gray-300 mx-auto mb-4"
             fill="none"

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import ProductCard from "../components/product/ProductCard";
 import productService from "../api/productService";
+import { initHomePageAnimations } from "../utils/scrollReveal";
 
 const HomePage = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -31,6 +32,11 @@ const HomePage = () => {
 
     // Start loading immediately
     fetchFeaturedProducts();
+  }, []);
+
+  // Initialize home page animations
+  useEffect(() => {
+    initHomePageAnimations();
   }, []);
 
   // Handle search form submission
@@ -72,15 +78,15 @@ const HomePage = () => {
       {/* Hero Section */}
       <section className="bg-gradient-to-r from-primary to-blue-700 text-white py-16 px-4 rounded-lg mb-12">
         <div className="max-w-3xl mx-auto text-center">
-          <h1 className="text-4xl font-bold mb-4">
+          <h1 className="hero-title text-4xl font-bold mb-4">
             Find the Best Deals Across the Web
           </h1>
-          <p className="text-xl mb-8">
+          <p className="hero-subtitle text-xl mb-8">
             Compare prices from AliExpress, eBay, and more in one place.
           </p>
 
           {/* Main Search Box */}
-          <form onSubmit={handleSearch} className="max-w-xl mx-auto">
+          <form onSubmit={handleSearch} className="search-container max-w-xl mx-auto">
             <div className="relative">
               <input
                 type="text"
@@ -112,14 +118,14 @@ const HomePage = () => {
       </section>
 
       {/* Featured Categories */}
-      <section className="mb-12">
+      <section className="categories-section mb-12">
         <h2 className="text-2xl font-bold mb-6">Popular Categories</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {["Electronics", "Home & Garden", "Fashion", "Toys & Games"].map(
             (category, index) => (
               <div
                 key={index}
-                className="bg-gray-100 p-4 rounded-lg text-center hover:bg-gray-200 cursor-pointer transition-colors"
+                className="category-item bg-gray-100 p-4 rounded-lg text-center hover:bg-gray-200 cursor-pointer transition-colors"
                 onClick={() => navigate(`/search?category=${category}`)}
               >
                 <p className="font-medium">{category}</p>
@@ -130,15 +136,9 @@ const HomePage = () => {
       </section>
 
       {/* Featured Products */}
-      <section>
-        <div className="flex justify-between items-center mb-6">
+      <section className="featured-section">
+        <div className="mb-6">
           <h2 className="text-2xl font-bold">Featured Deals</h2>
-          <button
-            onClick={() => navigate("/search")}
-            className="text-primary hover:underline"
-          >
-            View All
-          </button>
         </div>
 
         {/* Loading State */}
@@ -195,7 +195,9 @@ const HomePage = () => {
         {!isLoading && !error && featuredProducts.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {featuredProducts.map((product) => (
-              <ProductCard key={product.product_id} product={product} />
+              <div key={product.product_id} className="featured-product">
+                <ProductCard product={product} />
+              </div>
             ))}
           </div>
         )}

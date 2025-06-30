@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import GoogleSignInButton from "../components/auth/GoogleSignInButton";
+import { initRegisterPageAnimations } from "../utils/scrollReveal";
 
 const RegisterPage = () => {
   const navigate = useNavigate();
@@ -36,6 +37,11 @@ const RegisterPage = () => {
   useEffect(() => {
     clearError();
   }, [clearError]);
+
+  // Initialize register page animations
+  useEffect(() => {
+    initRegisterPageAnimations();
+  }, []);
 
   // Handle input changes
   const handleChange = (e) => {
@@ -156,11 +162,11 @@ const RegisterPage = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+        <div className="register-header">
+          <h2 className="register-title mt-6 text-center text-3xl font-extrabold text-gray-900">
             Create your account
           </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
+          <p className="register-subtitle mt-2 text-center text-sm text-gray-600">
             Or{" "}
             <Link
               to="/login"
@@ -173,7 +179,7 @@ const RegisterPage = () => {
 
         <div className="mt-8 space-y-6">
           {/* Google Registration Button */}
-          <div>
+          <div className="google-signup-section">
             <GoogleSignInButton
               onSuccess={handleGoogleSuccess}
               onError={handleGoogleError}
@@ -187,7 +193,7 @@ const RegisterPage = () => {
           </div>
 
           {/* Divider */}
-          <div className="relative">
+          <div className="register-divider relative">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-gray-300" />
             </div>
@@ -200,14 +206,14 @@ const RegisterPage = () => {
 
           {/* Error Display */}
           {authError && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+            <div className="register-error bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
               {authError}
             </div>
           )}
 
           {/* Registration Form */}
-          <form className="space-y-6" onSubmit={handleSubmit}>
-            <div>
+          <form className="register-form space-y-6" onSubmit={handleSubmit}>
+            <div className="form-field">
               <label
                 htmlFor="fullName"
                 className="block text-sm font-medium text-gray-700"
@@ -231,7 +237,7 @@ const RegisterPage = () => {
               )}
             </div>
 
-            <div>
+            <div className="form-field">
               <label
                 htmlFor="email"
                 className="block text-sm font-medium text-gray-700"
@@ -255,7 +261,7 @@ const RegisterPage = () => {
               )}
             </div>
 
-            <div>
+            <div className="form-field">
               <label
                 htmlFor="password"
                 className="block text-sm font-medium text-gray-700"
@@ -282,7 +288,7 @@ const RegisterPage = () => {
               </p>
             </div>
 
-            <div>
+            <div className="form-field">
               <label
                 htmlFor="confirmPassword"
                 className="block text-sm font-medium text-gray-700"
@@ -338,7 +344,7 @@ const RegisterPage = () => {
               <p className="text-sm text-red-600">{errors.acceptTerms}</p>
             )}
 
-            <div>
+            <div className="submit-button">
               <button
                 type="submit"
                 disabled={isLoading || isGoogleLoading}

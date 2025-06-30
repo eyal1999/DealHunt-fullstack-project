@@ -164,7 +164,6 @@ const WishlistAnalytics = ({ onClose }) => {
                 'aliexpress': 'bg-red-500',
                 'ebay': 'bg-yellow-500',
                 'walmart': 'bg-blue-500',
-                'amazon': 'bg-orange-500'
               };
               const color = colors[marketplace.toLowerCase()] || 'bg-gray-500';
               

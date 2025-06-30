@@ -38,4 +38,65 @@
   .text-balance {
     text-wrap: balance;
   }
+  
+  /* ScrollReveal: Hide elements initially to prevent FOUC (Flash of Unstyled Content) */
+  .product-breadcrumbs,
+  .product-detail-content,
+  .product-images-section,
+  .product-media-toggle,
+  .product-main-image,
+  .product-thumbnails,
+  .product-info,
+  .product-title-section,
+  .product-price-section,
+  .wishlist-message,
+  .product-actions,
+  .product-description-section,
+  .product-sidebar,
+  .seller-info-section,
+  .shipping-info-section,
+  .return-policy-section,
+  .product-specifications,
+  .reviews-section,
+  .review-item,
+  .related-products,
+  .related-product,
+  .login-header,
+  .login-title,
+  .login-subtitle,
+  .login-message,
+  .google-signin-section,
+  .login-divider,
+  .login-error,
+  .login-form,
+  .register-header,
+  .register-title,
+  .register-subtitle,
+  .google-signup-section,
+  .register-divider,
+  .register-error,
+  .register-form,
+  .form-field,
+  .form-options,
+  .submit-button,
+  .forgot-header,
+  .forgot-title,
+  .forgot-subtitle,
+  .forgot-error,
+  .success-message,
+  .forgot-form,
+  .back-link,
+  .wishlist-header,
+  .notification-settings,
+  .wishlist-summary,
+  .wishlist-grid,
+  .wishlist-item,
+  .empty-wishlist {
+    visibility: hidden;
+  }
+  
+  /* Show elements when ScrollReveal has initialized */
+  .sr-reveal {
+    visibility: visible;
+  }
 }

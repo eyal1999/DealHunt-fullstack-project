@@ -14,6 +14,8 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import ErrorBoundary from "./components/common/ErrorBoundary";
 import InstallBanner from "./components/pwa/InstallBanner";
+import { useEffect } from "react";
+import { initPageAnimations } from "./utils/scrollReveal";
 
 // Loading component for initial auth check
 const LoadingScreen = () => (
@@ -28,6 +30,11 @@ const LoadingScreen = () => (
 // Main app component that uses auth context
 const AppContent = () => {
   const { loading } = useAuth();
+
+  // Initialize common page animations
+  useEffect(() => {
+    initPageAnimations();
+  }, []);
 
   // Show loading screen while checking authentication
   if (loading) {

@@ -387,12 +387,6 @@ const GoogleSignInButton = ({
         )}
       </button>
 
-      {/* Debug info - only show in development */}
-      {import.meta.env.DEV && (
-        <p className="text-xs text-gray-400 mt-1 text-center">
-          Debug: {debugInfo}
-        </p>
-      )}
     </div>
   );
 };

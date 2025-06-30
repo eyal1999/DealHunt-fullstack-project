@@ -10,6 +10,7 @@ import { productService, wishlistService } from "../api/apiServices";
 import { useAuth } from "../contexts/AuthContext";
 import { useAutoWishlist } from "../hooks/useAutoWishlist";
 import { getImageUrl, getFallbackImageUrl } from "../utils/simpleImageProxy";
+import { initProductPageAnimations } from "../utils/scrollReveal";
 
 // Simple Image Component for Product Details
 const ProductImage = ({
@@ -215,10 +216,10 @@ const ProductImageSection = ({
   );
 
   return (
-    <div className="lg:col-span-1">
+    <div className="product-images-section lg:col-span-1">
       {/* Video/Image Toggle for AliExpress */}
       {product?.product_video_url && typeof product.product_video_url === 'string' && (
-        <div className="mb-4 flex gap-2">
+        <div className="product-media-toggle mb-4 flex gap-2">
           <button
             onClick={() => setShowVideo(false)}
             className={`px-3 py-1 rounded text-sm transition-colors ${
@@ -243,7 +244,7 @@ const ProductImageSection = ({
       )}
 
       {/* Main Image/Video Display */}
-      <div className="mb-4">
+      <div className="product-main-image mb-4">
         {showVideo && product?.product_video_url && typeof product.product_video_url === 'string' ? (
           <div className="w-full h-96 bg-black rounded-lg overflow-hidden">
             <video
@@ -281,7 +282,7 @@ const ProductImageSection = ({
 
       {/* Thumbnail Images */}
       {processedImages.length > 1 && (
-        <div className="grid grid-cols-4 gap-2">
+        <div className="product-thumbnails grid grid-cols-4 gap-2">
           {processedImages.map((image, index) => (
             <button
               key={index}
@@ -328,14 +329,19 @@ const ProductDetailPage = () => {
 
   // Fetch product detail with proper error handling
   const fetchProductDetail = useCallback(async () => {
-    if (!marketplace || !id) return;
+    if (!marketplace || !id) {
+      console.log("Missing marketplace or id:", { marketplace, id });
+      return;
+    }
 
+    console.log("Fetching product details for:", { marketplace, id });
     setIsLoading(true);
     setError(null);
 
     try {
       // Use the existing productService instead of raw fetch
       const data = await productService.getProductDetails(marketplace, id);
+      console.log("Product data received:", data);
       setProduct(data);
     } catch (err) {
       console.error("Error fetching product detail:", err);
@@ -370,6 +376,40 @@ const ProductDetailPage = () => {
       return () => clearTimeout(timer);
     }
   }, [wishlistMessage]);
+
+  // Initialize product page animations after product is loaded
+  useEffect(() => {
+    if (product && !isLoading && !error) {
+      // Small delay to ensure DOM is fully rendered
+      const timer = setTimeout(() => {
+        initProductPageAnimations();
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [product, isLoading, error]);
+
+  // Check if product is already in wishlist (when user is authenticated)
+  useEffect(() => {
+    const checkWishlistStatus = async () => {
+      if (!isAuthenticated || !product) return;
+
+      try {
+        // Use the helper function from wishlistService
+        const inWishlist = await wishlistService.isInWishlist(
+          product.product_id,
+          product.marketplace
+        );
+        setIsInWishlist(inWishlist);
+      } catch (error) {
+        console.error("Error checking wishlist status:", error);
+        // Don't show error to user for this background check
+        setIsInWishlist(false);
+      }
+    };
+
+    checkWishlistStatus();
+  }, [isAuthenticated, product]);
 
   // Handle adding product to wishlist
   const handleAddToWishlist = useCallback(async () => {
@@ -455,28 +495,6 @@ const ProductDetailPage = () => {
       setIsAddingToWishlist(false);
     }
   }, [isAuthenticated, product, isAddingToWishlist, navigate, marketplace, id]);
-
-  // Check if product is already in wishlist (when user is authenticated)
-  useEffect(() => {
-    const checkWishlistStatus = async () => {
-      if (!isAuthenticated || !product) return;
-
-      try {
-        // Use the helper function from wishlistService
-        const inWishlist = await wishlistService.isInWishlist(
-          product.product_id,
-          product.marketplace
-        );
-        setIsInWishlist(inWishlist);
-      } catch (error) {
-        console.error("Error checking wishlist status:", error);
-        // Don't show error to user for this background check
-        setIsInWishlist(false);
-      }
-    };
-
-    checkWishlistStatus();
-  }, [isAuthenticated, product]);
 
   // FIXED: Retry function that actually works
   const handleRetry = useCallback(() => {
@@ -639,7 +657,9 @@ const ProductDetailPage = () => {
           <div className="space-y-2">
             {shipping.slice(0, 3).map((option, index) => (
               <div key={index} className="flex justify-between text-sm">
-                <span className="text-gray-600">{option.type}:</span>
+                <span className="text-gray-600">
+                  {option.type || option.method || "Shipping"}:
+                </span>
                 <div className="text-right">
                   <div className="font-medium">
                     {option.cost === "0" ? "Free" : `$${option.cost}`}
@@ -698,13 +718,33 @@ const ProductDetailPage = () => {
 
     if (product?.categories) {
       // Handle categories if available
-      Object.entries(product.categories).forEach(([level, category]) => {
-        if (category && category !== "N/A") {
+      if (Array.isArray(product.categories)) {
+        // If categories is an array
+        product.categories.forEach((category) => {
+          if (category && typeof category === 'string' && category !== "N/A" && 
+              !category.match(/^\/?\d+\/?\d*$/)) { // Skip numeric IDs like /44/629
+            breadcrumbs.push({ name: category, path: null });
+          }
+        });
+      } else if (typeof product.categories === 'object') {
+        // If categories is an object
+        Object.entries(product.categories).forEach(([level, category]) => {
+          if (category && typeof category === 'string' && category !== "N/A" && 
+              !category.match(/^\/?\d+\/?\d*$/)) { // Skip numeric IDs like /44/629
+            breadcrumbs.push({ name: category, path: null });
+          }
+        });
+      } else if (typeof product.categories === 'string') {
+        // If categories is a single string
+        const category = product.categories;
+        if (category !== "N/A" && !category.match(/^\/?\d+\/?\d*$/)) {
           breadcrumbs.push({ name: category, path: null });
         }
-      });
-    } else {
-      // Fallback breadcrumbs
+      }
+    }
+
+    // If no valid categories were added, use fallback
+    if (breadcrumbs.length === 1) {
       breadcrumbs.push({ name: "Products", path: "/search" });
       if (product?.marketplace) {
         breadcrumbs.push({
@@ -773,12 +813,11 @@ const ProductDetailPage = () => {
     );
   }
 
-
   // Main render
   return (
     <div>
       {/* Enhanced Breadcrumbs */}
-      <div className="text-sm text-gray-500 mb-6">
+      <div className="product-breadcrumbs text-sm text-gray-500 mb-6">
         {formatBreadcrumbs(product).map((crumb, index) => (
           <span key={index}>
             {index > 0 && <span className="mx-2">/</span>}
@@ -808,7 +847,7 @@ const ProductDetailPage = () => {
       </div>
 
       {/* Product Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="product-detail-content grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* ENHANCED Product Images & Video - Left Column */}
         <ProductImageSection
           product={product}
@@ -819,9 +858,9 @@ const ProductDetailPage = () => {
         />
 
         {/* Product Info - Middle Column */}
-        <div className="lg:col-span-1">
+        <div className="product-info lg:col-span-1">
           {/* Title and Basic Info */}
-          <div className="mb-4">
+          <div className="product-title-section mb-4">
             <h1 className="text-2xl font-bold text-gray-800 mb-3">
               {product.title}
             </h1>
@@ -852,7 +891,7 @@ const ProductDetailPage = () => {
           </div>
 
           {/* Price Information */}
-          <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+          <div className="product-price-section mb-6 p-4 bg-gray-50 rounded-lg">
             <div className="flex items-baseline gap-3 mb-2">
               <span className="text-3xl font-bold text-green-600">
                 {formatPrice(product.sale_price)}
@@ -888,7 +927,7 @@ const ProductDetailPage = () => {
           {/* Wishlist Message Display */}
           {wishlistMessage && (
             <div
-              className={`mb-4 p-3 rounded-lg border ${
+              className={`wishlist-message mb-4 p-3 rounded-lg border ${
                 wishlistMessage.type === "success"
                   ? "bg-green-50 border-green-200 text-green-800"
                   : "bg-red-50 border-red-200 text-red-800"
@@ -904,7 +943,7 @@ const ProductDetailPage = () => {
           )}
 
           {/* Action Buttons */}
-          <div className="mb-6 space-y-3">
+          <div className="product-actions mb-6 space-y-3">
             <a
               href={product.affiliate_link}
               target="_blank"
@@ -950,27 +989,35 @@ const ProductDetailPage = () => {
           </div>
 
           {/* ENHANCED Description with better handling */}
-          <ProductDescription
-            description={product.description}
-            title={product.title}
-          />
+          <div className="product-description-section">
+            <ProductDescription
+              description={product.description}
+              title={product.title}
+            />
+          </div>
         </div>
 
         {/* Additional Info - Right Column */}
-        <div className="lg:col-span-1 space-y-4">
+        <div className="product-sidebar lg:col-span-1 space-y-4">
           {/* Seller/Shop Information */}
-          {formatSellerInfo(product.seller, product.marketplace)}
+          <div className="seller-info-section">
+            {formatSellerInfo(product.seller, product.marketplace)}
+          </div>
 
           {/* Shipping Information */}
-          {formatShippingInfo(product.shipping, product.location)}
+          <div className="shipping-info-section">
+            {formatShippingInfo(product.shipping, product.location)}
+          </div>
 
           {/* Return Policy */}
-          {formatReturnPolicy(product.return_policy)}
+          <div className="return-policy-section">
+            {formatReturnPolicy(product.return_policy)}
+          </div>
 
           {/* Product Specifications */}
           {product.specifications &&
             Object.keys(product.specifications).length > 0 && (
-              <div className="bg-white border rounded-lg overflow-hidden">
+              <div className="product-specifications bg-white border rounded-lg overflow-hidden">
                 <h3 className="font-semibold p-4 bg-gray-50 border-b">
                   Specifications
                 </h3>

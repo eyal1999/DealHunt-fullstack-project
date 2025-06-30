@@ -4,6 +4,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import GoogleSignInButton from "../components/auth/GoogleSignInButton";
 import { useAutoWishlist } from "../hooks/useAutoWishlist";
+import { initLoginPageAnimations } from "../utils/scrollReveal";
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -45,6 +46,11 @@ const LoginPage = () => {
   useEffect(() => {
     clearError();
   }, [clearError]);
+
+  // Initialize login page animations
+  useEffect(() => {
+    initLoginPageAnimations();
+  }, []);
 
   // Handle input changes
   const handleChange = (e) => {
@@ -132,20 +138,20 @@ const LoginPage = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+        <div className="login-header">
+          <h2 className="login-title mt-6 text-center text-3xl font-extrabold text-gray-900">
             Sign in to your account
           </h2>
 
           {/* Show redirect messages */}
           {redirectMessage && (
-            <div className="mt-4 p-3 bg-blue-100 border border-blue-400 text-blue-700 rounded">
+            <div className="login-message mt-4 p-3 bg-blue-100 border border-blue-400 text-blue-700 rounded">
               {redirectMessage}
             </div>
           )}
 
           {redirectAction && (
-            <div className="mt-4 p-3 bg-yellow-100 border border-yellow-400 text-yellow-700 rounded">
+            <div className="login-message mt-4 p-3 bg-yellow-100 border border-yellow-400 text-yellow-700 rounded">
               Please sign in to {redirectAction}
               {productTitle && (
                 <span className="font-medium"> "{productTitle}"</span>
@@ -153,7 +159,7 @@ const LoginPage = () => {
             </div>
           )}
 
-          <p className="mt-2 text-center text-sm text-gray-600">
+          <p className="login-subtitle mt-2 text-center text-sm text-gray-600">
             Or{" "}
             <Link
               to="/register"
@@ -166,7 +172,7 @@ const LoginPage = () => {
 
         <div className="mt-8 space-y-6">
           {/* Google Sign-In Button */}
-          <div>
+          <div className="google-signin-section">
             <GoogleSignInButton
               onSuccess={handleGoogleSuccess}
               onError={handleGoogleError}
@@ -177,7 +183,7 @@ const LoginPage = () => {
           </div>
 
           {/* Divider */}
-          <div className="relative">
+          <div className="login-divider relative">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-gray-300" />
             </div>
@@ -190,14 +196,14 @@ const LoginPage = () => {
 
           {/* Error Display */}
           {authError && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+            <div className="login-error bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
               {authError}
             </div>
           )}
 
           {/* Email/Password Form */}
-          <form className="space-y-6" onSubmit={handleSubmit}>
-            <div>
+          <form className="login-form space-y-6" onSubmit={handleSubmit}>
+            <div className="form-field">
               <label
                 htmlFor="email"
                 className="block text-sm font-medium text-gray-700"
@@ -221,7 +227,7 @@ const LoginPage = () => {
               )}
             </div>
 
-            <div>
+            <div className="form-field">
               <label
                 htmlFor="password"
                 className="block text-sm font-medium text-gray-700"
@@ -245,7 +251,7 @@ const LoginPage = () => {
               )}
             </div>
 
-            <div className="flex items-center justify-between">
+            <div className="form-options flex items-center justify-between">
               <div className="flex items-center">
                 <input
                   id="rememberMe"
@@ -273,7 +279,7 @@ const LoginPage = () => {
               </div>
             </div>
 
-            <div>
+            <div className="submit-button">
               <button
                 type="submit"
                 disabled={isLoading || isGoogleLoading}

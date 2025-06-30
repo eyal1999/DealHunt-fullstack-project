@@ -28,7 +28,7 @@ const TermsPage = () => {
           <p className="mb-4">
             DealHunt is a price comparison service that helps users find the
             best deals across multiple e-commerce platforms, including but not
-            limited to AliExpress, eBay, and Amazon. We provide links to these
+            limited to AliExpress and eBay. We provide links to these
             third-party websites and do not sell products directly.
           </p>
 

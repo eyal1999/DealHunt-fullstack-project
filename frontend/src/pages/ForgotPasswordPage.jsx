@@ -1,12 +1,18 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/index";
+import { initForgotPasswordPageAnimations } from "../utils/scrollReveal";
 
 const ForgotPasswordPage = () => {
   const [email, setEmail] = useState("");
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+
+  // Initialize forgot password page animations
+  useEffect(() => {
+    initForgotPasswordPageAnimations();
+  }, []);
 
   // Handle email input change
   const handleEmailChange = (e) => {
@@ -55,11 +61,11 @@ const ForgotPasswordPage = () => {
 
   return (
     <div className="max-w-md mx-auto">
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-800 mb-2">
+      <div className="forgot-header text-center mb-8">
+        <h1 className="forgot-title text-3xl font-bold text-gray-800 mb-2">
           Forgot Password
         </h1>
-        <p className="text-gray-600">
+        <p className="forgot-subtitle text-gray-600">
           {isSubmitted
             ? "Check your email for password reset instructions"
             : "Enter your email address to receive password reset instructions"}
@@ -67,13 +73,13 @@ const ForgotPasswordPage = () => {
       </div>
 
       {errors.general && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+        <div className="forgot-error bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
           {errors.general}
         </div>
       )}
 
       {isSubmitted ? (
-        <div className="bg-white rounded-lg shadow-md p-6 text-center">
+        <div className="success-message bg-white rounded-lg shadow-md p-6 text-center">
           <svg
             className="w-16 h-16 text-green-500 mx-auto mb-4"
             fill="none"
@@ -108,9 +114,9 @@ const ForgotPasswordPage = () => {
       ) : (
         <form
           onSubmit={handleSubmit}
-          className="bg-white rounded-lg shadow-md p-6"
+          className="forgot-form bg-white rounded-lg shadow-md p-6"
         >
-          <div className="mb-4">
+          <div className="form-field mb-4">
             <label htmlFor="email" className="block text-gray-700 mb-1">
               Email Address
             </label>
@@ -132,7 +138,7 @@ const ForgotPasswordPage = () => {
           <button
             type="submit"
             disabled={isLoading}
-            className={`w-full bg-primary text-white py-3 rounded font-medium ${
+            className={`submit-button w-full bg-primary text-white py-3 rounded font-medium ${
               isLoading ? "opacity-70 cursor-not-allowed" : "hover:bg-blue-700"
             }`}
           >
@@ -146,7 +152,7 @@ const ForgotPasswordPage = () => {
             )}
           </button>
 
-          <div className="text-center mt-4">
+          <div className="back-link text-center mt-4">
             <Link to="/login" className="text-primary hover:underline text-sm">
               Back to Login
             </Link>

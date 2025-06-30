@@ -341,7 +341,7 @@ const LocaleSettings = ({ onSettingsChange }) => {
                 Preferred Marketplaces
               </label>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                {['amazon', 'ebay', 'walmart', 'target', 'bestbuy', 'costco', 'aliexpress', 'etsy'].map(marketplace => (
+                {['ebay', 'walmart', 'target', 'bestbuy', 'costco', 'aliexpress', 'etsy'].map(marketplace => (
                   <label key={marketplace} className="flex items-center space-x-2">
                     <input
                       type="checkbox"

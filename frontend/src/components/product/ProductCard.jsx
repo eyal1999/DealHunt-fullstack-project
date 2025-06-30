@@ -4,19 +4,24 @@ import { useAuth } from "../../contexts/AuthContext";
 import { wishlistService } from "../../api/apiServices";
 import { getImageUrl, getFallbackImageUrl } from "../../utils/simpleImageProxy";
 
-const ProductCard = ({ product }) => {
+const ProductCard = ({ product, isWishlistContext = false, customButton = null }) => {
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
   // Local state for wishlist operations
   const [isAddingToWishlist, setIsAddingToWishlist] = useState(false);
-  const [isInWishlist, setIsInWishlist] = useState(false);
+  const [isInWishlist, setIsInWishlist] = useState(isWishlistContext);
 
   // Handle adding product to wishlist
   const handleAddToWishlist = useCallback(
     async (e) => {
       e.preventDefault(); // Prevent navigation when clicking heart button
       e.stopPropagation(); // Prevent event bubbling
+
+      // If in wishlist context, don't allow heart icon interaction
+      if (isWishlistContext) {
+        return;
+      }
 
       // Check if user is authenticated
       if (!isAuthenticated) {
@@ -94,7 +99,7 @@ const ProductCard = ({ product }) => {
         setIsAddingToWishlist(false);
       }
     },
-    [isAuthenticated, product, isAddingToWishlist, navigate]
+    [isAuthenticated, product, isAddingToWishlist, navigate, isWishlistContext]
   );
 
   // Format price with proper currency
@@ -142,7 +147,7 @@ const ProductCard = ({ product }) => {
   );
 
   return (
-    <div className="bg-white rounded-lg shadow-md overflow-hidden transform transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:-translate-y-1">
+    <div className="product-card bg-white rounded-lg shadow-md overflow-hidden transform transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:-translate-y-1">
       {/* Product Link - Wraps the clickable area */}
       <Link
         to={`/product/${product.marketplace}/${product.product_id}`}
@@ -241,47 +246,54 @@ const ProductCard = ({ product }) => {
           View Deal
         </a>
 
-        {/* Enhanced Wishlist Button */}
-        <button
-          onClick={handleAddToWishlist}
-          disabled={isAddingToWishlist || isInWishlist}
-          className={`p-2 rounded-full transition-all duration-200 ${
-            isInWishlist
-              ? "text-red-500 bg-red-50"
-              : isAddingToWishlist
-              ? "text-gray-400 cursor-not-allowed"
-              : "text-gray-500 hover:text-red-500 hover:bg-red-50"
-          }`}
-          title={
-            isInWishlist
-              ? "Already in wishlist"
-              : isAddingToWishlist
-              ? "Adding to wishlist..."
-              : isAuthenticated
-              ? "Add to wishlist"
-              : "Login to add to wishlist"
-          }
-        >
-          {isAddingToWishlist ? (
-            // Loading spinner
-            <div className="w-5 h-5 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600"></div>
-          ) : (
-            // Heart icon
-            <svg
-              className="w-5 h-5"
-              fill={isInWishlist ? "currentColor" : "none"}
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-              />
-            </svg>
-          )}
-        </button>
+        <div className="flex items-center space-x-2">
+          {/* Custom Button (e.g., Remove Item for wishlist) */}
+          {customButton && customButton}
+
+          {/* Enhanced Wishlist Button */}
+          <button
+            onClick={handleAddToWishlist}
+            disabled={isAddingToWishlist || isInWishlist || isWishlistContext}
+            className={`p-2 rounded-full transition-all duration-200 ${
+              isInWishlist || isWishlistContext
+                ? "text-red-500 bg-red-50"
+                : isAddingToWishlist
+                ? "text-gray-400 cursor-not-allowed"
+                : "text-gray-500 hover:text-red-500 hover:bg-red-50"
+            } ${isWishlistContext ? "cursor-default" : ""}`}
+            title={
+              isWishlistContext
+                ? "Item is in your wishlist"
+                : isInWishlist
+                ? "Already in wishlist"
+                : isAddingToWishlist
+                ? "Adding to wishlist..."
+                : isAuthenticated
+                ? "Add to wishlist"
+                : "Login to add to wishlist"
+            }
+          >
+            {isAddingToWishlist ? (
+              // Loading spinner
+              <div className="w-5 h-5 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600"></div>
+            ) : (
+              // Heart icon
+              <svg
+                className="w-5 h-5"
+                fill={isInWishlist || isWishlistContext ? "currentColor" : "none"}
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                />
+              </svg>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );
