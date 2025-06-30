@@ -6,7 +6,7 @@ client = TestClient(app)
 def test_read_root():
     response = client.get("/")
     assert response.status_code == 200
-    assert response.json() == {"message": "Welcome to DealHunt!"}
+    assert response.json() == {"message": "Welcome to DealHunt with Google OAuth!"}
 
 def test_search_endpoint():
     response = client.get("/search/?q=test")

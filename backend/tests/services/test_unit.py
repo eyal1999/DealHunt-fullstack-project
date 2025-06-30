@@ -6,26 +6,31 @@ def test_search_products_returns_list(monkeypatch):
     class DummyResp:
         status_code = 200
 
+        def raise_for_status(self):
+            pass
+
         @staticmethod
         def json():
             return {
-                "resp_code": 200,
-                "resp_result": {
-                    "result": {
-                        "products": {
-                            "product": [
-                                {
-                                    "product_id": "1",
-                                    "product_title": "Demo",
-                                    "original_price": "10.0",
-                                    "sale_price": "8.0",
-                                    "product_main_image_url": "https://img",
-                                    "product_detail_url": "https://detail",
-                                }
-                            ]
+                "aliexpress_affiliate_product_query_response": {
+                    "resp_result": {
+                        "resp_code": 200,
+                        "result": {
+                            "products": {
+                                "product": [
+                                    {
+                                        "product_id": "1",
+                                        "product_title": "Demo",
+                                        "original_price": "10.0",
+                                        "sale_price": "8.0",
+                                        "product_main_image_url": "https://img",
+                                        "product_detail_url": "https://detail",
+                                    }
+                                ]
+                            }
                         }
                     }
-                },
+                }
             }
 
     monkeypatch.setattr("app.services.search_service.requests.post", lambda *a, **k: DummyResp())

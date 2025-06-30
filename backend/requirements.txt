@@ -42,3 +42,9 @@ Pillow==10.1.0
 
 # Email services for password reset
 fastapi-mail==1.4.1
+
+# Testing dependencies
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-mock==3.12.0
+coverage==7.3.2
