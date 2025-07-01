@@ -12,50 +12,8 @@
   "lang": "en-US",
   "icons": [
     {
-      "src": "/icons/icon-72x72.png",
-      "sizes": "72x72",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/icons/icon-96x96.png",
-      "sizes": "96x96",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/icons/icon-128x128.png",
-      "sizes": "128x128",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/icons/icon-144x144.png",
-      "sizes": "144x144",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/icons/icon-152x152.png",
-      "sizes": "152x152",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/icons/icon-192x192.png",
+      "src": "/favicon.png",
       "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/icons/icon-384x384.png",
-      "sizes": "384x384",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/icons/icon-512x512.png",
-      "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
     }
@@ -65,51 +23,19 @@
       "name": "Search Products",
       "short_name": "Search",
       "description": "Find deals across all marketplaces",
-      "url": "/search",
-      "icons": [
-        {
-          "src": "/icons/search-96x96.png",
-          "sizes": "96x96"
-        }
-      ]
+      "url": "/search"
     },
     {
       "name": "My Wishlists",
       "short_name": "Wishlists",
       "description": "View and manage your wishlists",
-      "url": "/wishlists",
-      "icons": [
-        {
-          "src": "/icons/wishlist-96x96.png",
-          "sizes": "96x96"
-        }
-      ]
+      "url": "/wishlists"
     },
     {
       "name": "Price Alerts",
       "short_name": "Alerts",
       "description": "Manage your price alerts",
-      "url": "/price-tracking",
-      "icons": [
-        {
-          "src": "/icons/alert-96x96.png",
-          "sizes": "96x96"
-        }
-      ]
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "/screenshots/desktop-1.jpg",
-      "sizes": "1280x720",
-      "type": "image/jpeg",
-      "form_factor": "wide"
-    },
-    {
-      "src": "/screenshots/mobile-1.jpg",
-      "sizes": "390x844",
-      "type": "image/jpeg",
-      "form_factor": "narrow"
+      "url": "/price-tracking"
     }
   ]
 }

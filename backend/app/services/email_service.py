@@ -1,7 +1,10 @@
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 from typing import List
 import os
-from app.config import settings
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Email configuration
 conf = ConnectionConfig(
@@ -20,7 +23,7 @@ class EmailService:
     def __init__(self):
         self.fastmail = FastMail(conf)
 
-    async def send_password_reset_email(self, email: str, reset_token: str, frontend_url: str = "http://localhost:3000"):
+    async def send_password_reset_email(self, email: str, reset_token: str, frontend_url: str = None):
         """
         Send password reset email to user.
         
@@ -29,91 +32,106 @@ class EmailService:
             reset_token: The password reset token
             frontend_url: Frontend base URL for reset link
         """
+        # Use environment variable if frontend_url not provided
+        if frontend_url is None:
+            # Reload environment variables to get latest values
+            load_dotenv()
+            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+        
         reset_link = f"{frontend_url}/reset-password?token={reset_token}"
         
+        # Email-client compatible HTML using tables
         html_content = f"""
         <!DOCTYPE html>
         <html>
         <head>
             <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Password Reset - DealHunt</title>
-            <style>
-                body {{
-                    font-family: Arial, sans-serif;
-                    line-height: 1.6;
-                    color: #333;
-                    max-width: 600px;
-                    margin: 0 auto;
-                    padding: 20px;
-                }}
-                .header {{
-                    background-color: #3b82f6;
-                    color: white;
-                    padding: 20px;
-                    text-align: center;
-                    border-radius: 8px 8px 0 0;
-                }}
-                .content {{
-                    background-color: #f9f9f9;
-                    padding: 30px;
-                    border-radius: 0 0 8px 8px;
-                }}
-                .button {{
-                    display: inline-block;
-                    background-color: #3b82f6;
-                    color: white;
-                    padding: 12px 24px;
-                    text-decoration: none;
-                    border-radius: 6px;
-                    margin: 20px 0;
-                }}
-                .footer {{
-                    margin-top: 30px;
-                    padding-top: 20px;
-                    border-top: 1px solid #ddd;
-                    font-size: 12px;
-                    color: #666;
-                }}
-            </style>
         </head>
-        <body>
-            <div class="header">
-                <h1>🔒 Password Reset Request</h1>
-            </div>
-            <div class="content">
-                <p>Hello,</p>
-                
-                <p>We received a request to reset your password for your DealHunt account.</p>
-                
-                <p>Click the button below to reset your password:</p>
-                
-                <p style="text-align: center;">
-                    <a href="{reset_link}" class="button">Reset My Password</a>
-                </p>
-                
-                <p>Or copy and paste this link into your browser:</p>
-                <p style="word-break: break-all; background-color: #e5e7eb; padding: 10px; border-radius: 4px;">
-                    {reset_link}
-                </p>
-                
-                <p><strong>Important:</strong> This link will expire in 1 hour for security reasons.</p>
-                
-                <p>If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.</p>
-                
-                <div class="footer">
-                    <p>Best regards,<br>The DealHunt Team</p>
-                    <p>This is an automated email. Please do not reply to this message.</p>
-                </div>
-            </div>
+        <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f4; padding: 20px;">
+                <tr>
+                    <td align="center">
+                        <table width="600" cellpadding="0" cellspacing="0" style="background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                            <!-- Header -->
+                            <tr>
+                                <td style="background-color: #3b82f6; color: white; padding: 30px; text-align: center;">
+                                    <h1 style="margin: 0; font-size: 24px;">🔒 Password Reset Request</h1>
+                                </td>
+                            </tr>
+                            
+                            <!-- Content -->
+                            <tr>
+                                <td style="padding: 40px 30px;">
+                                    <p style="margin: 0 0 20px 0; font-size: 16px; line-height: 1.6; color: #333;">Hello,</p>
+                                    
+                                    <p style="margin: 0 0 20px 0; font-size: 16px; line-height: 1.6; color: #333;">We received a request to reset your password for your DealHunt account.</p>
+                                    
+                                    <p style="margin: 0 0 30px 0; font-size: 16px; line-height: 1.6; color: #333;">Click the button below to reset your password:</p>
+                                    
+                                    <!-- Button -->
+                                    <table width="100%" cellpadding="0" cellspacing="0">
+                                        <tr>
+                                            <td align="center" style="padding: 20px 0;">
+                                                <a href="{reset_link}" style="display: inline-block; background-color: #3b82f6; color: white; padding: 15px 30px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">Reset My Password</a>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                    
+                                    <p style="margin: 30px 0 20px 0; font-size: 16px; line-height: 1.6; color: #333;">Or copy and paste this link into your browser:</p>
+                                    <p style="margin: 0 0 30px 0; word-break: break-all; background-color: #f8f9fa; padding: 15px; border-radius: 4px; font-size: 14px; color: #666; border: 1px solid #e9ecef;">{reset_link}</p>
+                                    
+                                    <p style="margin: 0 0 20px 0; font-size: 16px; line-height: 1.6; color: #d63384;"><strong>Important:</strong> This link will expire in 1 hour for security reasons.</p>
+                                    
+                                    <p style="margin: 0 0 30px 0; font-size: 16px; line-height: 1.6; color: #333;">If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.</p>
+                                </td>
+                            </tr>
+                            
+                            <!-- Footer -->
+                            <tr>
+                                <td style="background-color: #f8f9fa; padding: 30px; text-align: center; border-top: 1px solid #e9ecef;">
+                                    <p style="margin: 0 0 10px 0; font-size: 16px; color: #333;"><strong>Best regards,<br>The DealHunt Team</strong></p>
+                                    <p style="margin: 0; font-size: 12px; color: #6c757d;">This is an automated email. Please do not reply to this message.</p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
         </body>
         </html>
         """
         
+        # Plain text version for better compatibility
+        text_content = f"""
+Password Reset Request - DealHunt
+
+Hello,
+
+We received a request to reset your password for your DealHunt account.
+
+To reset your password, please click the following link or copy and paste it into your browser:
+
+{reset_link}
+
+IMPORTANT: This link will expire in 1 hour for security reasons.
+
+If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.
+
+Best regards,
+The DealHunt Team
+
+---
+This is an automated email. Please do not reply to this message.
+        """
+
         message = MessageSchema(
             subject="Reset Your DealHunt Password",
             recipients=[email],
             body=html_content,
-            subtype="html"
+            subtype="html",
+            alternative_body=text_content
         )
         
         try:

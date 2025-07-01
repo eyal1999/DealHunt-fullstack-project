@@ -1,7 +1,7 @@
 // Service Worker for DealHunt PWA
-const CACHE_NAME = 'dealhunt-v1';
-const STATIC_CACHE = 'dealhunt-static-v1';
-const DYNAMIC_CACHE = 'dealhunt-dynamic-v1';
+const CACHE_NAME = 'dealhunt-v2';
+const STATIC_CACHE = 'dealhunt-static-v2';
+const DYNAMIC_CACHE = 'dealhunt-dynamic-v2';
 
 // Files to cache for offline functionality
 const STATIC_FILES = [
@@ -9,8 +9,7 @@ const STATIC_FILES = [
   '/static/js/bundle.js',
   '/static/css/main.css',
   '/manifest.json',
-  '/icons/icon-192x192.png',
-  '/icons/icon-512x512.png'
+  '/favicon.png'
 ];
 
 // API endpoints that should be cached
@@ -124,8 +123,8 @@ async function networkFirst(request) {
   try {
     const networkResponse = await fetch(request);
     
-    // Cache successful API responses
-    if (networkResponse.ok && shouldCacheAPI(request.url)) {
+    // Cache successful API responses (only GET requests)
+    if (networkResponse.ok && request.method === 'GET' && shouldCacheAPI(request.url)) {
       const cache = await caches.open(DYNAMIC_CACHE);
       cache.put(request, networkResponse.clone());
     }
@@ -133,10 +132,12 @@ async function networkFirst(request) {
     return networkResponse;
     
   } catch (error) {
-    // Return cached version if network fails
-    const cachedResponse = await caches.match(request);
-    if (cachedResponse) {
-      return cachedResponse;
+    // Return cached version if network fails (only for GET requests)
+    if (request.method === 'GET') {
+      const cachedResponse = await caches.match(request);
+      if (cachedResponse) {
+        return cachedResponse;
+      }
     }
     throw error;
   }
@@ -148,7 +149,8 @@ async function staleWhileRevalidate(request) {
   const cachedResponse = await cache.match(request);
   
   const fetchPromise = fetch(request).then((networkResponse) => {
-    if (networkResponse.ok) {
+    // Only cache GET requests - POST, PUT, DELETE should not be cached
+    if (networkResponse.ok && request.method === 'GET') {
       cache.put(request, networkResponse.clone());
     }
     return networkResponse;
@@ -306,20 +308,18 @@ self.addEventListener('push', (event) => {
   const data = event.data.json();
   const options = {
     body: data.body,
-    icon: '/icons/icon-192x192.png',
-    badge: '/icons/icon-72x72.png',
+    icon: '/favicon.png',
+    badge: '/favicon.png',
     tag: data.tag || 'default',
     data: data.data || {},
     actions: [
       {
         action: 'view',
-        title: 'View Deal',
-        icon: '/icons/view-action.png'
+        title: 'View Deal'
       },
       {
         action: 'dismiss',
-        title: 'Dismiss',
-        icon: '/icons/dismiss-action.png'
+        title: 'Dismiss'
       }
     ],
     requireInteraction: data.urgent || false,

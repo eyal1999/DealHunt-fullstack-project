@@ -62,6 +62,10 @@ yarn-error.log*
 logs
 *.log
 
+# Backend uploads and cache
+backend/uploads/image_cache/
+backend/uploads/profile_pictures/
+
 # OS generated files
 .DS_Store
 .DS_Store?

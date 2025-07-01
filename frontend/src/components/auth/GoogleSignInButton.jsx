@@ -169,7 +169,7 @@ const GoogleSignInButton = ({
           size: 'large',
           type: 'standard',
           text: 'continue_with',
-          width: '100%',
+          width: 300,
           logo_alignment: 'left'
         });
 
