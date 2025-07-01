@@ -324,9 +324,6 @@ const SearchResultsPage = () => {
       }
       
       return products.filter((product, index) => {
-        // TEMPORARILY DISABLE ALL FILTERS TO TEST
-        return true;
-        
         // Price range filter
         const minPrice = priceRange.min && priceRange.min !== "" ? parseFloat(priceRange.min) : 0;
         const maxPrice = priceRange.max && priceRange.max !== "" ? parseFloat(priceRange.max) : Infinity;
@@ -339,19 +336,29 @@ const SearchResultsPage = () => {
 
         const priceInRange = productPrice >= minPrice && productPrice <= maxPrice;
 
-        // Marketplace filter
-        const marketplaceAllowed =
-          marketplaceFilters[product.marketplace] || false;
+        // Marketplace filter - check if this product's marketplace is enabled
+        const productMarketplace = product.marketplace?.toLowerCase();
+        
+        // If no marketplaces are selected, show no products
+        const anyMarketplaceEnabled = Object.values(marketplaceFilters).some(enabled => enabled);
+        if (!anyMarketplaceEnabled) {
+          return false;
+        }
+        
+        // Check if this specific product's marketplace is enabled
+        const marketplaceAllowed = marketplaceFilters[productMarketplace] === true;
 
         // Debug first few products
         if (index < 3) {
           console.log(`Product ${index}:`, {
             title: product.title?.substring(0, 30),
-            marketplace: product.marketplace,
+            originalMarketplace: product.marketplace,
+            normalizedMarketplace: productMarketplace,
             price: productPrice,
             priceInRange,
             marketplaceAllowed,
-            marketplaceFilters
+            marketplaceFilters,
+            anyMarketplaceEnabled
           });
         }
 
