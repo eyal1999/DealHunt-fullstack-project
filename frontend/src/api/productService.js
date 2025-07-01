@@ -54,7 +54,7 @@ const productService = {
    */
   getFeaturedProducts: async (limit = 6) => {
     try {
-      // Check cache first (5 minute cache)
+      // Check cache first (30 minute cache - reduced frequency for more variety)
       const cacheKey = `featured_products_${limit}`;
       const cachedData = localStorage.getItem(cacheKey);
       const cacheTimestamp = localStorage.getItem(`${cacheKey}_timestamp`);
@@ -62,7 +62,7 @@ const productService = {
       if (cachedData && cacheTimestamp) {
         const now = Date.now();
         const cacheAge = now - parseInt(cacheTimestamp);
-        const cacheExpiry = 5 * 60 * 1000; // 5 minutes
+        const cacheExpiry = 30 * 60 * 1000; // 30 minutes for more variety
         
         if (cacheAge < cacheExpiry) {
           console.log('Using cached featured products');
@@ -70,21 +70,39 @@ const productService = {
         }
       }
 
-      // Use a consistent, popular search term for better caching at API level
-      const searchTerm = 'electronics'; // Popular, broad category
+      // Rotate through different categories and sorting methods for variety
+      const categories = ['electronics', 'home', 'fashion', 'sports', 'books', 'beauty'];
+      const sortMethods = ['sold_high', 'price_low', 'price_high'];
       
-      // Search for products and get first page with limited results
+      // Use current hour to create a rotating selection that changes throughout the day
+      const hour = new Date().getHours();
+      const categoryIndex = hour % categories.length;
+      const sortIndex = Math.floor(hour / 8) % sortMethods.length; // Changes every 8 hours
+      
+      const searchTerm = categories[categoryIndex];
+      const sortMethod = sortMethods[sortIndex];
+      
+      // Get more results than needed to allow for shuffling
+      const fetchLimit = Math.min(limit * 3, 50);
+      
+      // Search for products
       const response = await api.get("/search", {
         q: searchTerm,
-        sort: "sold_high", // Get most popular items
+        sort: sortMethod,
         page: 1,
-        page_size: limit,
+        page_size: fetchLimit,
       });
+
+      let products = response.results || [];
+      
+      // Shuffle the results and take only the requested limit for variety
+      products = products.sort(() => Math.random() - 0.5).slice(0, limit);
 
       const result = {
         success: true,
-        products: response.results || [],
-        searchTerm: searchTerm
+        products: products,
+        searchTerm: searchTerm,
+        sortMethod: sortMethod
       };
 
       // Cache the result
