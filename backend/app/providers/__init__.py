@@ -33,44 +33,50 @@ _register("ebay", "app.providers.ebay")
 # _register("amazon", "app.providers.amazon")  # ★ Sprint 2
 
 
-def _search_provider(provider_name: str, provider: Dict[str, ProviderFn], query: str) -> List[dict]:
-    """Search a single provider with error handling."""
+def _search_provider(provider_name: str, provider: Dict[str, ProviderFn], query: str, page: int) -> List[dict]:
+    """Search a single provider with error handling for a specific page."""
     try:
-        logger.info(f"Starting search for {provider_name}")
-        results = provider["search"](query)
-        logger.info(f"Completed search for {provider_name}: {len(results)} results")
+        logger.info(f"Starting search for {provider_name} - page {page}")
+        
+        # Call search function with page parameter
+        results = provider["search"](query, page)
+        
+        logger.info(f"Completed search for {provider_name} - page {page}: {len(results)} results")
         return results
     except Exception as e:
-        logger.error(f"Search failed for {provider_name}: {e}")
+        logger.error(f"Search failed for {provider_name} - page {page}: {e}")
         return []
 
-def search(query: str) -> List[dict]:
-    """Run search on every registered provider concurrently and merge with caching."""
+def search(query: str, page: int = 1) -> List[dict]:
+    """Run search on every registered provider concurrently for a specific page."""
     if not query or not query.strip():
         return []
     
+    # Create cache key with page number
+    cache_key = f"{query}:page:{page}"
+    
     # Check cache first
-    cached_results = search_cache.get(query)
+    cached_results = search_cache.get(cache_key)
     if cached_results is not None:
-        logger.info(f"Cache hit for query: {query[:50]}... ({len(cached_results)} results)")
+        logger.info(f"Cache hit for query: {query[:50]}... page: {page} ({len(cached_results)} results)")
         return cached_results
     
-    logger.info(f"Cache miss for query: {query[:50]}... Fetching from providers")
+    logger.info(f"Cache miss for query: {query[:50]}... page: {page} - Fetching from providers")
     
     if not _registry:
         return []
     
     # Use ThreadPoolExecutor for concurrent API calls
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(_registry)) as executor:
-        # Submit all provider searches
+        # Submit provider searches for the specific page
         future_to_provider = {
-            executor.submit(_search_provider, name, provider, query): name 
+            executor.submit(_search_provider, name, provider, query, page): name 
             for name, provider in _registry.items()
         }
         
         # Collect results as they complete
         all_results: List[dict] = []
-        for future in concurrent.futures.as_completed(future_to_provider, timeout=20):
+        for future in concurrent.futures.as_completed(future_to_provider, timeout=20):  # Reduced timeout for single page
             provider_name = future_to_provider[future]
             try:
                 provider_results = future.result()
@@ -78,12 +84,12 @@ def search(query: str) -> List[dict]:
             except Exception as e:
                 logger.error(f"Error getting results from {provider_name}: {e}")
     
-    logger.info(f"Total search results: {len(all_results)}")
+    logger.info(f"Total search results for page {page}: {len(all_results)}")
     
     # Cache the results (only if we got some results)
     if all_results:
-        search_cache.set(query, all_results, ttl=300)  # Cache for 5 minutes
-        logger.info(f"Cached results for query: {query[:50]}...")
+        search_cache.set(cache_key, all_results, ttl=300)  # Cache for 5 minutes per page
+        logger.info(f"Cached results for query: {query[:50]}... page: {page}")
     
     return all_results
 

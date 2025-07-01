@@ -78,8 +78,8 @@ const api = {
       }
     });
 
-    // Make GET request
-    return api.fetch(url.pathname + url.search, { method: "GET" });
+    // Make GET request - use full URL string
+    return api.fetch(url.toString().replace(API_BASE_URL, ''), { method: "GET" });
   },
 
   post: (endpoint, data = {}) => {

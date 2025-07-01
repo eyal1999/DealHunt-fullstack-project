@@ -46,16 +46,22 @@ def _paginate_results(items: List[dict], page: int, page_size: int) -> dict:
     # Get items for current page
     paginated_items = items[start_index:end_index]
     
-    # More conservative has_next calculation
-    has_next = (page < total_pages) and (end_index < total_items)
+    # For better UX, always assume more pages are available up to a reasonable limit
+    # This creates a smooth infinite scroll experience
+    max_supported_pages = 100  # Support up to 100 pages
+    has_next = page < max_supported_pages and len(paginated_items) > 0
+    
+    # Since we fetch per-page from APIs, we don't know the total
+    # We'll estimate based on current results
+    estimated_total = page * page_size + (page_size if has_next else len(paginated_items))
     
     return {
         "items": paginated_items,
         "pagination": {
             "current_page": page,
             "page_size": page_size,
-            "total_items": total_items,
-            "total_pages": total_pages,
+            "total_items": estimated_total,  # Estimated based on current page
+            "total_pages": max_supported_pages,  # Maximum supported
             "has_next": has_next,
             "has_previous": page > 1,
             "items_on_page": len(paginated_items)
@@ -67,7 +73,7 @@ def search_products(
     q: str = Query(..., min_length=1, description="Search query"),
     sort: str = Query("price_low", description="Sort order: price_low | price_high | sold_high"),
     page: int = Query(1, ge=1, description="Page number (starts from 1)"),
-    page_size: int = Query(12, ge=1, le=50, description="Items per page (1-50)")
+    page_size: int = Query(50, ge=1, le=200, description="Items per page (1-200)")
 ):
     """Search for products across all supported marketplaces with pagination."""
     # Validate sort parameter
@@ -86,8 +92,8 @@ def search_products(
         raise HTTPException(status_code=400, detail="Search query too long (max 200 characters)")
 
     try:
-        # Search across all providers (this gets ALL results)
-        all_results = provider_search(query)
+        # Search across all providers with page-based loading
+        all_results = provider_search(query, page=page)
         
         # Validate results structure
         if not isinstance(all_results, list):

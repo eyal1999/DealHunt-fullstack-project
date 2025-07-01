@@ -503,7 +503,7 @@ const SearchResultsPage = () => {
         searchQuery,
         sortBy,
         1, // page = 1 for initial load
-        12 // SMALLER page size for more pages = better infinite scroll experience
+        50 // LARGER page size to handle thousands of results efficiently
       );
 
       console.log("Initial API Response:", response);
@@ -550,7 +550,7 @@ const SearchResultsPage = () => {
         searchQuery,
         sortBy,
         nextPage,
-        12 // Same small page size
+        50 // Same larger page size for efficiency
       );
 
       console.log(`Page ${nextPage} API Response:`, response);
@@ -739,11 +739,7 @@ const SearchResultsPage = () => {
             ? "Searching..."
             : error
             ? "Search failed"
-            : `Found ${totalItems} products${
-                filteredAndSortedProducts.length !== products.length
-                  ? ` (${filteredAndSortedProducts.length} after filters)`
-                  : ""
-              }`}
+            : "Discover products from multiple marketplaces"}
         </p>
       </div>
 
@@ -890,7 +886,9 @@ const SearchResultsPage = () => {
             <div className="text-sm text-gray-600">
               {isInitialLoading
                 ? "Loading..."
-                : `Showing ${filteredAndSortedProducts.length} of ${totalItems} results`}
+                : hasMore 
+                  ? `Found ${filteredAndSortedProducts.length}+ products`
+                  : `Found ${filteredAndSortedProducts.length} products`}
             </div>
             <div className="flex items-center">
               <span className="text-sm mr-2">Sort by:</span>

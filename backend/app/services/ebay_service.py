@@ -155,27 +155,54 @@ def clean_ebay_description(description: str) -> str:
         return text_only
 
 # ── SEARCH ─────────────────────────────────────────────────────
-def search_products_ebay(query: str) -> List[dict]:
-    try:
+def _search_ebay_single_page(query: str, offset: int = 0, limit: int = 50) -> tuple[List[dict], bool]:
+    """Search a single page of eBay results.
+    
+    Returns:
+        tuple: (list of products, has_more_pages)
+    """
+    params = {
+        "q": query,
+        "limit": limit,
+        "offset": offset
+    }
+    
+    resp = requests.get(f"{settings.ebay_base_url}/buy/browse/v1/item_summary/search",
+        params=params, headers=_get_headers(), timeout=(3, 10))
+    
+    # If we get 401/403, try refreshing token once
+    if resp.status_code in [401, 403]:
+        ebay_token_manager.force_refresh()
         resp = requests.get(f"{settings.ebay_base_url}/buy/browse/v1/item_summary/search",
-            params={"q": query},headers=_get_headers(),timeout=(3, 10),)
+            params=params, headers=_get_headers(), timeout=(3, 10))
+    
+    resp.raise_for_status()
+    response_data = resp.json()
+    items = response_data.get("itemSummaries", [])
+    
+    # Check if there are more pages
+    total = response_data.get("total", 0)
+    has_more = (offset + len(items)) < total
+    
+    return items, has_more
+
+def search_products_ebay_single_page(query: str, page: int = 1) -> List[dict]:
+    """Search eBay for a single page of results.
+    
+    Args:
+        query: Search keywords
+        page: Page number (1-based)
+    
+    Returns:
+        List of ProductSummary dicts for that page
+    """
+    try:
+        limit = 50  # eBay's maximum per page
+        offset = (page - 1) * limit
         
-        # If we get 401/403, try refreshing token once
-        if resp.status_code in [401, 403]:
-            ebay_token_manager.force_refresh()
-            resp = requests.get(f"{settings.ebay_base_url}/buy/browse/v1/item_summary/search",
-                params={"q": query},headers=_get_headers(),timeout=(3, 10),)
+        items, has_more = _search_ebay_single_page(query, offset, limit)
         
-        resp.raise_for_status()
-        response_data = resp.json()
-        items = response_data.get("itemSummaries", [])
-        
-        # Debug logging to see eBay API response structure
-        print(f"🔍 eBay API Response Keys: {list(response_data.keys())}")
-        if items:
-            print(f"🔍 eBay First Item Keys: {list(items[0].keys())}")
-            print(f"🔍 eBay First Item Sample: {items[0]}")
-        
+        # Process the items
         results = []
         for i in items:
             # Handle image URL safely - convert empty strings to None
@@ -183,7 +210,7 @@ def search_products_ebay(query: str) -> List[dict]:
             image_url = image_url if image_url and image_url.strip() else None
             
             # Handle affiliate link safely
-            affiliate_link = i.get("itemAffiliateWebUrl", i["itemWebUrl"])
+            affiliate_link = i.get("itemAffiliateWebUrl", i.get("itemWebUrl"))
             affiliate_link = affiliate_link if affiliate_link and affiliate_link.strip() else None
             
             # Extract sold count - try multiple possible field names
@@ -213,7 +240,115 @@ def search_products_ebay(query: str) -> List[dict]:
                 print(f"eBay product validation error for item {i.get('itemId')}: {validation_error}")
                 # Skip invalid products instead of failing the entire search
                 continue
+        
         return results
+    except Exception as e:
+        print(f"eBay search error: {e}")
+        raise EbayError(f"Failed to search eBay: {str(e)}")
+
+def search_products_ebay(query: str, max_pages: int = 20) -> List[dict]:
+    """Search eBay with multi-page support for thousands of results.
+    
+    Args:
+        query: Search keywords
+        max_pages: Maximum number of pages to fetch (default: 20 for ~1000 results)
+    
+    Returns:
+        List of ProductSummary dicts from all pages combined
+    """
+    try:
+        all_results = []
+        limit = 50  # eBay's maximum per page
+        offset = 0
+        consecutive_empty_pages = 0
+        
+        print(f"🔍 Starting eBay multi-page search for '{query}' - fetching up to {max_pages} pages")
+        
+        for page in range(max_pages):
+            try:
+                # Add small delay between requests
+                if page > 0:
+                    import time
+                    time.sleep(0.1)
+                
+                items, has_more = _search_ebay_single_page(query, offset, limit)
+                
+                if not items:
+                    consecutive_empty_pages += 1
+                    print(f"📭 eBay Page {page + 1}: No products found (consecutive empty: {consecutive_empty_pages})")
+                    
+                    # Stop if we get 3 consecutive empty pages
+                    if consecutive_empty_pages >= 3:
+                        print(f"🛑 Stopping eBay search after {consecutive_empty_pages} consecutive empty pages")
+                        break
+                    
+                    offset += limit
+                    continue
+                else:
+                    consecutive_empty_pages = 0
+                
+                print(f"📦 eBay Page {page + 1}: Found {len(items)} products")
+                
+                # Process the items for this page
+                for i in items:
+                    # Handle image URL safely - convert empty strings to None
+                    image_url = i.get("image", {}).get("imageUrl", "") 
+                    image_url = image_url if image_url and image_url.strip() else None
+                    
+                    # Handle affiliate link safely
+                    affiliate_link = i.get("itemAffiliateWebUrl", i.get("itemWebUrl"))
+                    affiliate_link = affiliate_link if affiliate_link and affiliate_link.strip() else None
+                    
+                    # Extract sold count - try multiple possible field names
+                    sold_count = 0
+                    for field in ["quantitySold", "soldQuantity", "totalSold", "salesCount", "soldCount"]:
+                        if field in i and i[field] is not None:
+                            try:
+                                sold_count = int(i[field])
+                                break
+                            except (ValueError, TypeError):
+                                continue
+                    
+                    try:
+                        product = ProductSummary(
+                            product_id=i["itemId"],
+                            title=i["title"],
+                            original_price=float(i["price"]["value"]),
+                            sale_price=float(i["price"]["value"]),
+                            image=image_url,
+                            detail_url=i["itemWebUrl"],
+                            affiliate_link=affiliate_link,
+                            marketplace="ebay",
+                            sold_count=sold_count,
+                        )
+                        all_results.append(product.model_dump())
+                    except Exception as validation_error:
+                        print(f"eBay product validation error for item {i.get('itemId')}: {validation_error}")
+                        # Skip invalid products instead of failing the entire search
+                        continue
+                
+                # Update offset for next page
+                offset += limit
+                
+                # Stop if we've reached the end
+                if not has_more:
+                    print(f"🏁 eBay search completed: No more results available")
+                    break
+                    
+            except Exception as page_error:
+                print(f"❌ Error fetching eBay page {page + 1}: {page_error}")
+                consecutive_empty_pages += 1
+                
+                # Stop if we get too many errors
+                if consecutive_empty_pages >= 5:
+                    print(f"🛑 Stopping eBay search after {consecutive_empty_pages} consecutive failures")
+                    break
+                
+                offset += limit
+                continue
+        
+        print(f"✅ eBay multi-page search completed: {len(all_results)} total products from {query}")
+        return all_results
     except Exception as e:
         print(f"eBay search error: {e}")
         raise EbayError(f"Failed to search eBay: {str(e)}")

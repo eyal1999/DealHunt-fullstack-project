@@ -13,12 +13,12 @@ from app.models.models import ProductSummary, ProductDetail, PromotionLink
 
 # ------------------------------------------------------------------ constants
 _HEADERS = {"Content-Type": "application/x-www-form-urlencoded;charset=utf-8"}
-MAX_PRODUCTS_PER_PAGE = 50      # Increased from 12 to 50 for more results per search
+MAX_PRODUCTS_PER_PAGE = 12      # AliExpress actual limit is 12 products per call
 MAX_AFFILIATE_LINKS_PER_CALL = 50  # AliExpress allows up to 50 URLs per affiliate link call
 
-# Search configuration - easily adjustable
-DEFAULT_MAX_PAGES = 2           # Default pages to fetch (2 × 50 = 100 products)
-AGGRESSIVE_MAX_PAGES = 4        # For when we want more results (4 × 50 = 200 products)
+# Search configuration - single page fetching for on-demand loading
+DEFAULT_MAX_PAGES = 1           # Default: fetch one page at a time
+AGGRESSIVE_MAX_PAGES = 3        # For testing: fetch up to 3 pages
 
 # Web scraping headers to mimic a real browser
 SCRAPING_HEADERS = {
@@ -347,12 +347,12 @@ def search_products(query: str, page_no: int = 1, page_size: int = None) -> List
 
 
 def search_products_multi_page(query: str, max_pages: int = None, page_size: int = None) -> List[dict]:
-    """Search for products across multiple pages to get more results.
+    """Search for products across multiple pages to get thousands of results.
     
     Args:
         query: Search keywords
-        max_pages: Maximum number of pages to fetch (default: 2 for 100 total results)
-        page_size: Number of products per page (max 50)
+        max_pages: Maximum number of pages to fetch (default: 25 for ~300 total results)
+        page_size: Number of products per page (AliExpress limit: 12)
     
     Returns:
         List of ProductSummary dicts from all pages combined
@@ -363,20 +363,48 @@ def search_products_multi_page(query: str, max_pages: int = None, page_size: int
     if page_size is None:
         page_size = MAX_PRODUCTS_PER_PAGE
     
+    # Cap the maximum pages to prevent excessive API calls
+    max_pages = min(max_pages, AGGRESSIVE_MAX_PAGES)
+    
     all_products = []
+    consecutive_empty_pages = 0
+    
+    print(f"🔍 Starting multi-page search for '{query}' - fetching up to {max_pages} pages")
     
     for page in range(1, max_pages + 1):
         try:
+            # Add small delay between requests to be respectful
+            if page > 1:
+                time.sleep(0.1)  # 100ms delay between requests
+            
             products = search_products(query, page_no=page, page_size=page_size)
             
             if not products:
-                break
+                consecutive_empty_pages += 1
+                print(f"📭 Page {page}: No products found (consecutive empty: {consecutive_empty_pages})")
                 
+                # Stop if we get 3 consecutive empty pages
+                if consecutive_empty_pages >= 3:
+                    print(f"🛑 Stopping search after {consecutive_empty_pages} consecutive empty pages")
+                    break
+                continue
+            else:
+                consecutive_empty_pages = 0  # Reset counter
+                
+            print(f"📦 Page {page}: Found {len(products)} products")
             all_products.extend(products)
             
         except Exception as e:
-            # Continue with other pages even if one fails
+            print(f"❌ Error fetching page {page}: {e}")
+            consecutive_empty_pages += 1
+            
+            # Stop if we get too many errors
+            if consecutive_empty_pages >= 5:
+                print(f"🛑 Stopping search after {consecutive_empty_pages} consecutive failures")
+                break
             continue
+    
+    print(f"✅ Multi-page search completed: {len(all_products)} total products from {query}")
     return all_products
 
 # ---------------------------------------------------------------- product detail

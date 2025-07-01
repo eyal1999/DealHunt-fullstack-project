@@ -17,7 +17,7 @@ const productService = {
     pageSize = 20
   ) => {
     try {
-      return await api.get("/search", {
+      return await api.get("/search/", {
         q: query,
         sort,
         page,
