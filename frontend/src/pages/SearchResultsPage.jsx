@@ -1,6 +1,6 @@
 // frontend/src/pages/SearchResultsPage.jsx
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import ProductCard from "../components/product/ProductCard";
 import { productService } from "../api/apiServices";
 import { useInfiniteScroll } from "../hooks/useInfiniteScroll";
@@ -17,9 +17,28 @@ import { initSearchPageAnimations } from "../utils/scrollReveal";
  */
 const SearchResultsPage = () => {
   // Extract search parameters from URL
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const query = searchParams.get("q") || "";
   const category = searchParams.get("category") || "";
+  
+  // Initialize filter states from URL parameters
+  const getInitialPriceRange = () => ({
+    min: searchParams.get("min_price") || "",
+    max: searchParams.get("max_price") || "",
+  });
+  
+  const getInitialMarketplaceFilters = () => {
+    const aliexpress = searchParams.get("aliexpress");
+    const ebay = searchParams.get("ebay");
+    return {
+      aliexpress: aliexpress === null ? true : aliexpress === "true",
+      ebay: ebay === null ? true : ebay === "true",
+    };
+  };
+  
+  const getInitialCategoryFilter = () => searchParams.get("category_filter") || "all";
+  const getInitialSortBy = () => searchParams.get("sort") || "price_low";
 
   // ====== PRODUCT DATA STATE ======
   const [products, setProducts] = useState([]);
@@ -32,26 +51,37 @@ const SearchResultsPage = () => {
   const [error, setError] = useState(null);
 
   // ====== FILTER STATE ======
-  // Sorting state
-  const [sortBy, setSortBy] = useState("price_low");
-
-  // Price range filter state
-  const [priceRange, setPriceRange] = useState({
-    min: "",
-    max: "",
-  });
-
-  // Marketplace filter state - each marketplace can be toggled
-  const [marketplaceFilters, setMarketplaceFilters] = useState({
-    aliexpress: true,
-    ebay: true,
-  });
-
-  // Category filter state
-  const [categoryFilter, setCategoryFilter] = useState("all");
+  // Initialize filter states from URL parameters
+  const [sortBy, setSortBy] = useState(getInitialSortBy);
+  const [priceRange, setPriceRange] = useState(getInitialPriceRange);
+  const [marketplaceFilters, setMarketplaceFilters] = useState(getInitialMarketplaceFilters);
+  const [categoryFilter, setCategoryFilter] = useState(getInitialCategoryFilter);
   const [availableCategories, setAvailableCategories] = useState([]);
 
   // ====== FILTER FUNCTIONS ======
+
+  /**
+   * Update URL parameters when filters change
+   */
+  const updateUrlParams = useCallback((newParams) => {
+    const currentParams = new URLSearchParams(searchParams);
+    
+    // Update or remove parameters
+    Object.entries(newParams).forEach(([key, value]) => {
+      if (value === null || value === undefined || value === "" || 
+          (key === "aliexpress" && value === true) || 
+          (key === "ebay" && value === true) ||
+          (key === "category_filter" && value === "all") ||
+          (key === "sort" && value === "price_low")) {
+        // Remove default values to keep URL clean
+        currentParams.delete(key);
+      } else {
+        currentParams.set(key, value.toString());
+      }
+    });
+    
+    setSearchParams(currentParams, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   /**
    * Extract categories from products for filter options
@@ -616,6 +646,34 @@ const SearchResultsPage = () => {
     setAvailableCategories(categories);
   }, [products, extractCategories]);
 
+  // Sync filter state when URL parameters change (for browser back/forward)
+  useEffect(() => {
+    const urlSort = searchParams.get("sort") || "price_low";
+    const urlMinPrice = searchParams.get("min_price") || "";
+    const urlMaxPrice = searchParams.get("max_price") || "";
+    const urlAliexpress = searchParams.get("aliexpress");
+    const urlEbay = searchParams.get("ebay");
+    const urlCategoryFilter = searchParams.get("category_filter") || "all";
+    
+    // Only update state if values are different to avoid infinite loops
+    if (sortBy !== urlSort) setSortBy(urlSort);
+    if (priceRange.min !== urlMinPrice || priceRange.max !== urlMaxPrice) {
+      setPriceRange({ min: urlMinPrice, max: urlMaxPrice });
+    }
+    
+    const urlMarketplaceFilters = {
+      aliexpress: urlAliexpress === null ? true : urlAliexpress === "true",
+      ebay: urlEbay === null ? true : urlEbay === "true",
+    };
+    
+    if (marketplaceFilters.aliexpress !== urlMarketplaceFilters.aliexpress || 
+        marketplaceFilters.ebay !== urlMarketplaceFilters.ebay) {
+      setMarketplaceFilters(urlMarketplaceFilters);
+    }
+    
+    if (categoryFilter !== urlCategoryFilter) setCategoryFilter(urlCategoryFilter);
+  }, [searchParams.toString()]); // Use toString() to avoid dependency on searchParams object
+
   // ====== EVENT HANDLERS ======
 
   /**
@@ -623,6 +681,7 @@ const SearchResultsPage = () => {
    */
   const handleSortChange = (newSortBy) => {
     setSortBy(newSortBy);
+    updateUrlParams({ sort: newSortBy });
     // fetchInitialProducts will automatically run due to dependency
   };
 
@@ -630,10 +689,12 @@ const SearchResultsPage = () => {
    * Handle price range filter changes
    */
   const handlePriceRangeChange = (field, value) => {
-    setPriceRange((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    const newPriceRange = { ...priceRange, [field]: value };
+    setPriceRange(newPriceRange);
+    updateUrlParams({ 
+      min_price: newPriceRange.min, 
+      max_price: newPriceRange.max 
+    });
     // Effect will trigger re-filter of current results
   };
 
@@ -641,10 +702,12 @@ const SearchResultsPage = () => {
    * Handle marketplace filter changes
    */
   const handleMarketplaceChange = (marketplace, checked) => {
-    setMarketplaceFilters((prev) => ({
-      ...prev,
-      [marketplace]: checked,
-    }));
+    const newMarketplaceFilters = { ...marketplaceFilters, [marketplace]: checked };
+    setMarketplaceFilters(newMarketplaceFilters);
+    updateUrlParams({ 
+      aliexpress: newMarketplaceFilters.aliexpress,
+      ebay: newMarketplaceFilters.ebay
+    });
     // Effect will trigger re-filter of current results
   };
 
@@ -653,6 +716,7 @@ const SearchResultsPage = () => {
    */
   const handleCategoryChange = (selectedCategory) => {
     setCategoryFilter(selectedCategory);
+    updateUrlParams({ category_filter: selectedCategory });
     // Effect will trigger re-filter of current results
   };
 
@@ -660,13 +724,31 @@ const SearchResultsPage = () => {
    * Reset all filters to default state
    */
   const resetFilters = () => {
-    setPriceRange({ min: "", max: "" });
-    setMarketplaceFilters({
+    const defaultFilters = {
+      min: "",
+      max: "",
+    };
+    const defaultMarketplaceFilters = {
       aliexpress: true,
       ebay: true,
+    };
+    const defaultCategory = "all";
+    const defaultSort = "price_low";
+    
+    setPriceRange(defaultFilters);
+    setMarketplaceFilters(defaultMarketplaceFilters);
+    setCategoryFilter(defaultCategory);
+    setSortBy(defaultSort);
+    
+    // Clear all filter parameters from URL
+    updateUrlParams({
+      min_price: "",
+      max_price: "",
+      aliexpress: true,
+      ebay: true,
+      category_filter: "all",
+      sort: "price_low"
     });
-    setCategoryFilter("all");
-    setSortBy("price_low");
   };
 
   /**
