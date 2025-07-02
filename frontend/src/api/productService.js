@@ -8,21 +8,35 @@ const productService = {
    * @param {string} sort - Sort mode (price_low, price_high)
    * @param {number} page - Page number (starts from 1)
    * @param {number} pageSize - Number of items per page
+   * @param {number} minPrice - Minimum price filter (optional)
+   * @param {number} maxPrice - Maximum price filter (optional)
    * @returns {Promise} - Promise that resolves to search results with pagination
    */
   searchProducts: async (
     query,
     sort = "price_low",
     page = 1,
-    pageSize = 20
+    pageSize = 20,
+    minPrice = null,
+    maxPrice = null
   ) => {
     try {
-      return await api.get("/search/", {
+      const params = {
         q: query,
         sort,
         page,
         page_size: pageSize,
-      });
+      };
+      
+      // Add price filters if provided
+      if (minPrice !== null && minPrice !== undefined && minPrice >= 0) {
+        params.min_price = minPrice;
+      }
+      if (maxPrice !== null && maxPrice !== undefined && maxPrice >= 0) {
+        params.max_price = maxPrice;
+      }
+      
+      return await api.get("/search/", params);
     } catch (error) {
       console.error("Error searching products:", error);
       throw error;

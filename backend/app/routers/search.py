@@ -73,7 +73,9 @@ def search_products(
     q: str = Query(..., min_length=1, description="Search query"),
     sort: str = Query("price_low", description="Sort order: price_low | price_high | sold_high"),
     page: int = Query(1, ge=1, description="Page number (starts from 1)"),
-    page_size: int = Query(50, ge=1, le=200, description="Items per page (1-200)")
+    page_size: int = Query(50, ge=1, le=200, description="Items per page (1-200)"),
+    min_price: float = Query(None, ge=0, description="Minimum price filter"),
+    max_price: float = Query(None, ge=0, description="Maximum price filter")
 ):
     """Search for products across all supported marketplaces with pagination."""
     # Validate sort parameter
@@ -90,10 +92,14 @@ def search_products(
     query = q.strip()
     if len(query) > 200:  # Reasonable query length limit
         raise HTTPException(status_code=400, detail="Search query too long (max 200 characters)")
+    
+    # Validate price range
+    if min_price is not None and max_price is not None and min_price > max_price:
+        raise HTTPException(status_code=400, detail="Minimum price cannot be greater than maximum price")
 
     try:
-        # Search across all providers with page-based loading
-        all_results = provider_search(query, page=page)
+        # Search across all providers with page-based loading and price filtering
+        all_results = provider_search(query, page=page, min_price=min_price, max_price=max_price)
         
         # Validate results structure
         if not isinstance(all_results, list):

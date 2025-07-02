@@ -155,8 +155,15 @@ def clean_ebay_description(description: str) -> str:
         return text_only
 
 # ── SEARCH ─────────────────────────────────────────────────────
-def _search_ebay_single_page(query: str, offset: int = 0, limit: int = 50) -> tuple[List[dict], bool]:
-    """Search a single page of eBay results.
+def _search_ebay_single_page(query: str, offset: int = 0, limit: int = 50, min_price: float = None, max_price: float = None) -> tuple[List[dict], bool]:
+    """Search a single page of eBay results with optional price filtering.
+    
+    Args:
+        query: Search keywords
+        offset: Starting position for results
+        limit: Number of results per page
+        min_price: Minimum price filter (optional)
+        max_price: Maximum price filter (optional)
     
     Returns:
         tuple: (list of products, has_more_pages)
@@ -166,6 +173,22 @@ def _search_ebay_single_page(query: str, offset: int = 0, limit: int = 50) -> tu
         "limit": limit,
         "offset": offset
     }
+    
+    # Add price range filtering if provided
+    if min_price is not None or max_price is not None:
+        price_filters = []
+        if min_price is not None:
+            price_filters.append(f"price:[{min_price} TO *]")
+        if max_price is not None:
+            price_filters.append(f"price:[* TO {max_price}]")
+        
+        # eBay API uses filter parameter for price ranges
+        if min_price is not None and max_price is not None:
+            params["filter"] = f"price:[{min_price}..{max_price}],priceCurrency:USD"
+        elif min_price is not None:
+            params["filter"] = f"price:[{min_price}..*],priceCurrency:USD"
+        elif max_price is not None:
+            params["filter"] = f"price:[*..{max_price}],priceCurrency:USD"
     
     resp = requests.get(f"{settings.ebay_base_url}/buy/browse/v1/item_summary/search",
         params=params, headers=_get_headers(), timeout=(3, 10))
@@ -186,12 +209,14 @@ def _search_ebay_single_page(query: str, offset: int = 0, limit: int = 50) -> tu
     
     return items, has_more
 
-def search_products_ebay_single_page(query: str, page: int = 1) -> List[dict]:
-    """Search eBay for a single page of results.
+def search_products_ebay_single_page(query: str, page: int = 1, min_price: float = None, max_price: float = None) -> List[dict]:
+    """Search eBay for a single page of results with optional price filtering.
     
     Args:
         query: Search keywords
         page: Page number (1-based)
+        min_price: Minimum price filter (optional)
+        max_price: Maximum price filter (optional)
     
     Returns:
         List of ProductSummary dicts for that page
@@ -200,7 +225,7 @@ def search_products_ebay_single_page(query: str, page: int = 1) -> List[dict]:
         limit = 50  # eBay's maximum per page
         offset = (page - 1) * limit
         
-        items, has_more = _search_ebay_single_page(query, offset, limit)
+        items, has_more = _search_ebay_single_page(query, offset, limit, min_price, max_price)
         
         # Process the items
         results = []
@@ -246,12 +271,14 @@ def search_products_ebay_single_page(query: str, page: int = 1) -> List[dict]:
         print(f"eBay search error: {e}")
         raise EbayError(f"Failed to search eBay: {str(e)}")
 
-def search_products_ebay(query: str, max_pages: int = 20) -> List[dict]:
-    """Search eBay with multi-page support for thousands of results.
+def search_products_ebay(query: str, max_pages: int = 20, min_price: float = None, max_price: float = None) -> List[dict]:
+    """Search eBay with multi-page support for thousands of results with optional price filtering.
     
     Args:
         query: Search keywords
         max_pages: Maximum number of pages to fetch (default: 20 for ~1000 results)
+        min_price: Minimum price filter (optional)
+        max_price: Maximum price filter (optional)
     
     Returns:
         List of ProductSummary dicts from all pages combined
@@ -271,7 +298,7 @@ def search_products_ebay(query: str, max_pages: int = 20) -> List[dict]:
                     import time
                     time.sleep(0.1)
                 
-                items, has_more = _search_ebay_single_page(query, offset, limit)
+                items, has_more = _search_ebay_single_page(query, offset, limit, min_price, max_price)
                 
                 if not items:
                     consecutive_empty_pages += 1

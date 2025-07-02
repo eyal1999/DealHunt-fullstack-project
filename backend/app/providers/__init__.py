@@ -33,13 +33,13 @@ _register("ebay", "app.providers.ebay")
 # _register("amazon", "app.providers.amazon")  # ★ Sprint 2
 
 
-def _search_provider(provider_name: str, provider: Dict[str, ProviderFn], query: str, page: int) -> List[dict]:
-    """Search a single provider with error handling for a specific page."""
+def _search_provider(provider_name: str, provider: Dict[str, ProviderFn], query: str, page: int, min_price: float = None, max_price: float = None) -> List[dict]:
+    """Search a single provider with error handling for a specific page with optional price filtering."""
     try:
-        logger.info(f"Starting search for {provider_name} - page {page}")
+        logger.info(f"Starting search for {provider_name} - page {page} (price range: ${min_price or 0}-${max_price or '∞'})")
         
-        # Call search function with page parameter
-        results = provider["search"](query, page)
+        # Call search function with page and price parameters
+        results = provider["search"](query, page, min_price, max_price)
         
         logger.info(f"Completed search for {provider_name} - page {page}: {len(results)} results")
         return results
@@ -47,13 +47,16 @@ def _search_provider(provider_name: str, provider: Dict[str, ProviderFn], query:
         logger.error(f"Search failed for {provider_name} - page {page}: {e}")
         return []
 
-def search(query: str, page: int = 1) -> List[dict]:
-    """Run search on every registered provider concurrently for a specific page."""
+def search(query: str, page: int = 1, min_price: float = None, max_price: float = None) -> List[dict]:
+    """Run search on every registered provider concurrently for a specific page with optional price filtering."""
     if not query or not query.strip():
         return []
     
-    # Create cache key with page number
-    cache_key = f"{query}:page:{page}"
+    # Create cache key with page number and price range
+    price_suffix = ""
+    if min_price is not None or max_price is not None:
+        price_suffix = f":price:{min_price or 0}-{max_price or 'inf'}"
+    cache_key = f"{query}:page:{page}{price_suffix}"
     
     # Check cache first
     cached_results = search_cache.get(cache_key)
@@ -68,9 +71,9 @@ def search(query: str, page: int = 1) -> List[dict]:
     
     # Use ThreadPoolExecutor for concurrent API calls
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(_registry)) as executor:
-        # Submit provider searches for the specific page
+        # Submit provider searches for the specific page with price filtering
         future_to_provider = {
-            executor.submit(_search_provider, name, provider, query, page): name 
+            executor.submit(_search_provider, name, provider, query, page, min_price, max_price): name 
             for name, provider in _registry.items()
         }
         

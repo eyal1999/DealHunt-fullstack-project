@@ -499,11 +499,18 @@ const SearchResultsPage = () => {
       );
 
       const searchQuery = query || category;
+      
+      // Parse price range values
+      const minPrice = priceRange.min ? parseFloat(priceRange.min) : null;
+      const maxPrice = priceRange.max ? parseFloat(priceRange.max) : null;
+      
       const response = await productService.searchProducts(
         searchQuery,
         sortBy,
         1, // page = 1 for initial load
-        50 // LARGER page size to handle thousands of results efficiently
+        50, // LARGER page size to handle thousands of results efficiently
+        minPrice,
+        maxPrice
       );
 
       console.log("Initial API Response:", response);
@@ -546,11 +553,18 @@ const SearchResultsPage = () => {
       console.log(`Fetching page ${nextPage} for query:`, query);
 
       const searchQuery = query || category;
+      
+      // Parse price range values
+      const minPrice = priceRange.min ? parseFloat(priceRange.min) : null;
+      const maxPrice = priceRange.max ? parseFloat(priceRange.max) : null;
+      
       const response = await productService.searchProducts(
         searchQuery,
         sortBy,
         nextPage,
-        50 // Same larger page size for efficiency
+        50, // Same larger page size for efficiency
+        minPrice,
+        maxPrice
       );
 
       console.log(`Page ${nextPage} API Response:`, response);

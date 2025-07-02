@@ -9,12 +9,14 @@ from app.services.ebay_service import (
     fetch_product_detail_ebay,
 )
 
-def search(query: str, page: int = 1):
-    """Search eBay for results corresponding to frontend page.
+def search(query: str, page: int = 1, min_price: float = None, max_price: float = None):
+    """Search eBay for results corresponding to frontend page with optional price filtering.
     
     Args:
         query: Search keywords
         page: Frontend page number (1-based, expects ~50 products per page)
+        min_price: Minimum price filter (optional)
+        max_price: Maximum price filter (optional)
     
     Returns:
         List of ProductSummary dicts for that frontend page
@@ -24,8 +26,8 @@ def search(query: str, page: int = 1):
         # So we can directly map frontend page to eBay page
         from app.services.ebay_service import search_products_ebay_single_page
         
-        results = search_products_ebay_single_page(query, page=page)
-        print(f"eBay frontend page {page}: fetched {len(results)} products")
+        results = search_products_ebay_single_page(query, page=page, min_price=min_price, max_price=max_price)
+        print(f"eBay frontend page {page}: fetched {len(results)} products (price range: ${min_price or 0}-${max_price or '∞'})")
         return results
         
     except Exception as e:
