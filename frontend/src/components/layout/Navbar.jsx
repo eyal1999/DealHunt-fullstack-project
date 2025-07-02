@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import DealHuntLogo from "../../assets/DEALHUNT_LOGO.png";
 import profileService from "../../api/profileService";
+import SearchDropdown from "../search/SearchDropdown";
 
 const Navbar = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -29,11 +30,10 @@ const Navbar = () => {
     };
   }, []);
 
-  // Handle search form submission
-  const handleSearch = (e) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
+  // Handle search submission
+  const handleSearch = (query) => {
+    if (query.trim()) {
+      navigate(`/search?q=${encodeURIComponent(query)}`);
       setSearchQuery("");
     }
   };
@@ -79,35 +79,13 @@ const Navbar = () => {
 
           {/* Search Bar - Hide on mobile */}
           <div className="hidden md:flex flex-1 px-4 max-w-xl mx-4">
-            <form onSubmit={handleSearch} className="w-full">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Search for products..."
-                  className="w-full p-2 pl-10 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-primary"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-                <button
-                  type="submit"
-                  className="absolute inset-y-0 left-0 pl-3 flex items-center"
-                >
-                  <svg
-                    className="h-5 w-5 text-gray-400"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                    />
-                  </svg>
-                </button>
-              </div>
-            </form>
+            <SearchDropdown
+              searchQuery={searchQuery}
+              onSearch={handleSearch}
+              onQueryChange={setSearchQuery}
+              placeholder="Search for products..."
+              className="w-full"
+            />
           </div>
 
           {/* Navigation Links */}
@@ -226,35 +204,13 @@ const Navbar = () => {
 
         {/* Mobile Search - Visible only on mobile */}
         <div className="md:hidden pb-4">
-          <form onSubmit={handleSearch}>
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Search for products..."
-                className="w-full p-2 pl-10 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-primary"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <button
-                type="submit"
-                className="absolute inset-y-0 left-0 pl-3 flex items-center"
-              >
-                <svg
-                  className="h-5 w-5 text-gray-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                  />
-                </svg>
-              </button>
-            </div>
-          </form>
+          <SearchDropdown
+            searchQuery={searchQuery}
+            onSearch={handleSearch}
+            onQueryChange={setSearchQuery}
+            placeholder="Search for products..."
+            className="w-full"
+          />
         </div>
 
         {/* Mobile Menu */}

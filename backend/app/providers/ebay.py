@@ -10,18 +10,27 @@ from app.services.ebay_service import (
 )
 
 def search(query: str, page: int = 1):
-    """Search eBay for a specific page of results.
+    """Search eBay for results corresponding to frontend page.
     
     Args:
         query: Search keywords
-        page: Page number to fetch (1-based)
+        page: Frontend page number (1-based, expects ~50 products per page)
     
     Returns:
-        List of ProductSummary dicts for that page
+        List of ProductSummary dicts for that frontend page
     """
-    # Use the existing single-page search function
-    from app.services.ebay_service import search_products_ebay_single_page
-    return search_products_ebay_single_page(query, page=page)
+    try:
+        # eBay gives 50 products per page, which matches our frontend page size
+        # So we can directly map frontend page to eBay page
+        from app.services.ebay_service import search_products_ebay_single_page
+        
+        results = search_products_ebay_single_page(query, page=page)
+        print(f"eBay frontend page {page}: fetched {len(results)} products")
+        return results
+        
+    except Exception as e:
+        print(f"eBay search error for frontend page {page}: {e}")
+        return []
 
 def detail(product_id: str):
     return fetch_product_detail_ebay(product_id)

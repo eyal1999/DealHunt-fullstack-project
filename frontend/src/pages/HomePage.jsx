@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import ProductCard from "../components/product/ProductCard";
 import productService from "../api/productService";
 import { initHomePageAnimations } from "../utils/scrollReveal";
+import SearchDropdown from "../components/search/SearchDropdown";
 
 const HomePage = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -39,11 +40,10 @@ const HomePage = () => {
     initHomePageAnimations();
   }, []);
 
-  // Handle search form submission
-  const handleSearch = (e) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
+  // Handle search submission
+  const handleSearch = (query) => {
+    if (query.trim()) {
+      navigate(`/search?q=${encodeURIComponent(query)}`);
     }
   };
 
@@ -76,7 +76,7 @@ const HomePage = () => {
   return (
     <div>
       {/* Hero Section */}
-      <section className="bg-gradient-to-r from-primary to-blue-700 text-white py-16 px-4 rounded-lg mb-12">
+      <section className="bg-gradient-to-r from-primary to-blue-700 text-white py-16 px-4 rounded-lg mb-12 relative z-20">
         <div className="max-w-3xl mx-auto text-center">
           <h1 className="hero-title text-4xl font-bold mb-4">
             Find the Best Deals Across the Web
@@ -86,46 +86,28 @@ const HomePage = () => {
           </p>
 
           {/* Main Search Box */}
-          <form onSubmit={handleSearch} className="search-container max-w-xl mx-auto">
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Search for products..."
-                className="w-full p-4 pr-12 text-gray-900 rounded-full focus:outline-none focus:ring-2 focus:ring-secondary"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <button
-                type="submit"
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 bg-secondary text-white p-2.5 rounded-full hover:bg-yellow-500"
-              >
-                <svg
-                  className="w-5 h-5"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
-                    clipRule="evenodd"
-                  ></path>
-                </svg>
-              </button>
-            </div>
-          </form>
+          <div className="search-container max-w-xl mx-auto relative z-[10000]">
+            <SearchDropdown
+              searchQuery={searchQuery}
+              onSearch={handleSearch}
+              onQueryChange={setSearchQuery}
+              placeholder="Search for products..."
+              className="w-full"
+              variant="hero"
+            />
+          </div>
         </div>
       </section>
 
       {/* Featured Categories */}
-      <section className="categories-section mb-12">
+      <section className="categories-section mb-12 relative z-10">
         <h2 className="text-2xl font-bold mb-6">Popular Categories</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {["Electronics", "Home & Garden", "Fashion", "Toys & Games"].map(
             (category, index) => (
               <div
                 key={index}
-                className="category-item bg-gray-100 p-4 rounded-lg text-center hover:bg-gray-200 cursor-pointer transition-colors"
+                className="category-item bg-gray-100 p-4 rounded-lg text-center hover:bg-gray-200 cursor-pointer transition-colors relative z-10"
                 onClick={() => navigate(`/search?category=${category}`)}
               >
                 <p className="font-medium">{category}</p>
