@@ -7,9 +7,7 @@ const wishlistService = {
    */
   getWishlist: async () => {
     try {
-      console.log("Fetching wishlist from API...");
       const response = await api.get("/wishlist");
-      console.log("Wishlist API response:", response);
 
       // The API returns an array of wishlist items directly
       return response || [];
@@ -35,8 +33,6 @@ const wishlistService = {
    */
   addToWishlist: async (productData) => {
     try {
-      console.log("Adding to wishlist:", productData);
-
       // Validate required fields
       const requiredFields = [
         "product_id",
@@ -55,7 +51,6 @@ const wishlistService = {
       }
 
       const response = await api.post("/wishlist", productData);
-      console.log("Add to wishlist response:", response);
 
       return response;
     } catch (error) {
@@ -81,15 +76,12 @@ const wishlistService = {
    */
   removeFromWishlist: async (itemId) => {
     try {
-      console.log("Removing from wishlist, item ID:", itemId);
-
       if (!itemId || typeof itemId !== "string") {
         throw new Error("Invalid item ID provided");
       }
 
       // The backend expects the MongoDB _id as the path parameter
       const response = await api.delete(`/wishlist/${itemId}`);
-      console.log("Remove from wishlist response:", response);
 
       return response;
     } catch (error) {

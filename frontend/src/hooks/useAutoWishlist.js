@@ -2,7 +2,7 @@
 import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { wishlistService } from "../api/apiServices";
+import { useWishlist } from "../contexts/WishlistContext";
 
 /**
  * Custom hook to handle automatic wishlist actions after login
@@ -11,6 +11,7 @@ export const useAutoWishlist = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { isAuthenticated, currentUser } = useAuth();
+  const { addToWishlist } = useWishlist();
 
   useEffect(() => {
     const handleAutoWishlistAction = async () => {
@@ -32,7 +33,7 @@ export const useAutoWishlist = () => {
         console.log("🔵 Found pending wishlist action, auto-adding product:", productData);
 
         // Add the product to wishlist automatically
-        await wishlistService.addToWishlist(productData);
+        await addToWishlist(productData);
 
         console.log("✅ Product automatically added to wishlist after login");
 
@@ -89,7 +90,7 @@ export const useAutoWishlist = () => {
       const timeoutId = setTimeout(handleAutoWishlistAction, 100);
       return () => clearTimeout(timeoutId);
     }
-  }, [isAuthenticated, currentUser]);
+  }, [isAuthenticated, currentUser, addToWishlist]);
 
   return null; // This hook doesn't return anything
 };

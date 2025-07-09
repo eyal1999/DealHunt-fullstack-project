@@ -6,8 +6,9 @@ import React, {
   useRef,
 } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { productService, wishlistService } from "../api/apiServices";
+import { productService } from "../api/apiServices";
 import { useAuth } from "../contexts/AuthContext";
+import { useWishlist } from "../contexts/WishlistContext";
 import { useAutoWishlist } from "../hooks/useAutoWishlist";
 import { getImageUrl, getFallbackImageUrl } from "../utils/simpleImageProxy";
 import { initProductPageAnimations } from "../utils/scrollReveal";
@@ -310,10 +311,84 @@ const ProductImageSection = ({
 const ProductDetailPage = () => {
   const { marketplace, id } = useParams();
   const navigate = useNavigate();
-  const { isAuthenticated, currentUser } = useAuth();
+  const { isAuthenticated } = useAuth();
+  const { isInWishlist: checkIsInWishlist, addToWishlist, removeFromWishlist, getWishlistItem, wishlistItems } = useWishlist();
 
   // Enable auto-wishlist functionality
   useAutoWishlist();
+
+  // Get marketplace logo component (same as ProductCard)
+  const getMarketplaceLogo = (marketplace) => {
+    const marketplaceName = marketplace?.toLowerCase();
+    
+    switch (marketplaceName) {
+      case 'aliexpress':
+        return (
+          <div className="flex items-center bg-white px-3 py-1 rounded-full shadow-sm border border-gray-200">
+            <span className="text-sm font-bold text-orange-500">AliExpress</span>
+          </div>
+        );
+      case 'ebay':
+        return (
+          <div className="flex items-center bg-white px-3 py-1 rounded-full shadow-sm border border-gray-200">
+            <span className="text-sm font-bold text-blue-600">e</span>
+            <span className="text-sm font-bold text-red-500">b</span>
+            <span className="text-sm font-bold text-yellow-500">a</span>
+            <span className="text-sm font-bold text-green-500">y</span>
+          </div>
+        );
+      case 'amazon':
+        return (
+          <div className="flex items-center bg-white px-3 py-1 rounded-full shadow-sm border border-gray-200">
+            <span className="text-sm font-bold text-gray-900">amazon</span>
+            <svg className="w-4 h-3 ml-1" viewBox="0 0 100 30" fill="currentColor">
+              <path d="M60 20c-10 8-25 12-37 12-18 0-33-7-45-18-1-1 0-2 1-1 15 8 33 13 52 13 13 0 27-3 40-8 2-1 3 1 1 2z" fill="#FF9900"/>
+              <path d="M63 17c-1-2-8-1-11-1-1 0-1-1 0-1 8-1 20 0 21 1 1 1 0 8-4 11 0 1-1 0-1 0 3-4 4-8 3-10z" fill="#FF9900"/>
+            </svg>
+          </div>
+        );
+      case 'walmart':
+        return (
+          <div className="flex items-center bg-white px-3 py-1 rounded-full shadow-sm border border-gray-200">
+            <div className="w-4 h-4 mr-1">
+              <svg viewBox="0 0 100 100" fill="#0071ce">
+                <circle cx="50" cy="25" r="8"/>
+                <circle cx="25" cy="43" r="8"/>
+                <circle cx="75" cy="43" r="8"/>
+                <circle cx="25" cy="75" r="8"/>
+                <circle cx="75" cy="75" r="8"/>
+                <circle cx="50" cy="93" r="8"/>
+              </svg>
+            </div>
+            <span className="text-sm font-bold text-blue-600">Walmart</span>
+          </div>
+        );
+      default:
+        return (
+          <div className="flex items-center bg-gray-100 px-3 py-1 rounded-full border border-gray-300">
+            <span className="text-sm font-medium capitalize text-gray-700">{marketplace || 'Unknown'}</span>
+          </div>
+        );
+    }
+  };
+
+  // Get official marketplace name for text display
+  const getOfficialMarketplaceName = (marketplace) => {
+    const marketplaceNames = {
+      'aliexpress': 'AliExpress',
+      'ebay': 'ebay',
+      'amazon': 'Amazon',
+      'walmart': 'Walmart',
+      'target': 'Target',
+      'bestbuy': 'Best Buy',
+      'newegg': 'Newegg',
+      'etsy': 'Etsy'
+    };
+    
+    return marketplaceNames[marketplace?.toLowerCase()] || 
+           (marketplace?.charAt(0).toUpperCase() + marketplace?.slice(1)) || 
+           'Unknown';
+  };
 
   // State management
   const [product, setProduct] = useState(null);
@@ -334,14 +409,12 @@ const ProductDetailPage = () => {
       return;
     }
 
-    console.log("Fetching product details for:", { marketplace, id });
     setIsLoading(true);
     setError(null);
 
     try {
       // Use the existing productService instead of raw fetch
       const data = await productService.getProductDetails(marketplace, id);
-      console.log("Product data received:", data);
       setProduct(data);
     } catch (err) {
       console.error("Error fetching product detail:", err);
@@ -371,7 +444,7 @@ const ProductDetailPage = () => {
     if (wishlistMessage) {
       const timer = setTimeout(() => {
         setWishlistMessage(null);
-      }, 5000); // Clear after 5 seconds
+      }, 5000); // 5 seconds
 
       return () => clearTimeout(timer);
     }
@@ -391,25 +464,65 @@ const ProductDetailPage = () => {
 
   // Check if product is already in wishlist (when user is authenticated)
   useEffect(() => {
-    const checkWishlistStatus = async () => {
-      if (!isAuthenticated || !product) return;
+    if (!isAuthenticated || !product) return;
 
-      try {
-        // Use the helper function from wishlistService
-        const inWishlist = await wishlistService.isInWishlist(
-          product.product_id,
-          product.marketplace
-        );
-        setIsInWishlist(inWishlist);
-      } catch (error) {
-        console.error("Error checking wishlist status:", error);
-        // Don't show error to user for this background check
+    const inWishlist = checkIsInWishlist(product.product_id, product.marketplace);
+    setIsInWishlist(inWishlist);
+  }, [isAuthenticated, product, checkIsInWishlist, wishlistItems]);
+
+  // Handle removing product from wishlist
+  const handleRemoveFromWishlist = useCallback(async () => {
+    if (!isAuthenticated || !product || isAddingToWishlist) return;
+
+    try {
+      setIsAddingToWishlist(true);
+
+      // Find the wishlist item to get its ID
+      const wishlistItem = getWishlistItem(product.product_id, product.marketplace);
+
+      if (!wishlistItem) {
+        setWishlistMessage({
+          type: "error",
+          text: "Item not found in wishlist.",
+        });
         setIsInWishlist(false);
+        return;
       }
-    };
 
-    checkWishlistStatus();
-  }, [isAuthenticated, product]);
+      await removeFromWishlist(wishlistItem.id);
+
+      // The context will update the wishlist state automatically
+      setWishlistMessage({
+        type: "success",
+        text: `"${product.title}" has been removed from your wishlist!`,
+      });
+    } catch (error) {
+      console.error("Error removing from wishlist:", error);
+
+      let errorMessage = "Failed to remove item from wishlist. Please try again.";
+
+      if (
+        error.message.includes("401") ||
+        error.message.includes("Unauthorized")
+      ) {
+        errorMessage = "Your session has expired. Please log in again.";
+        navigate("/login", {
+          state: {
+            from: `/product/${marketplace}/${id}`,
+            message: "Your session has expired. Please log in to manage your wishlist.",
+          },
+        });
+        return;
+      }
+
+      setWishlistMessage({
+        type: "error",
+        text: errorMessage,
+      });
+    } finally {
+      setIsAddingToWishlist(false);
+    }
+  }, [isAuthenticated, product, isAddingToWishlist, navigate, marketplace, id, getWishlistItem, removeFromWishlist]);
 
   // Handle adding product to wishlist
   const handleAddToWishlist = useCallback(async () => {
@@ -459,13 +572,14 @@ const ProductDetailPage = () => {
         affiliate_link: product.affiliate_link,
       };
 
-      await wishlistService.addToWishlist(wishlistData);
+      await addToWishlist(wishlistData);
 
-      setIsInWishlist(true);
-      setWishlistMessage({
+      // The context will update the wishlist state automatically
+      const successMessage = {
         type: "success",
         text: `"${product.title}" has been added to your wishlist!`,
-      });
+      };
+      setWishlistMessage(successMessage);
     } catch (error) {
       console.error("Error adding to wishlist:", error);
 
@@ -494,7 +608,7 @@ const ProductDetailPage = () => {
     } finally {
       setIsAddingToWishlist(false);
     }
-  }, [isAuthenticated, product, isAddingToWishlist, navigate, marketplace, id]);
+  }, [isAuthenticated, product, isAddingToWishlist, navigate, marketplace, id, addToWishlist]);
 
   // FIXED: Retry function that actually works
   const handleRetry = useCallback(() => {
@@ -866,9 +980,7 @@ const ProductDetailPage = () => {
             </h1>
 
             <div className="flex flex-wrap items-center gap-3 mb-4">
-              <span className="bg-gray-100 px-3 py-1 rounded-full text-sm font-medium capitalize">
-                {product.marketplace}
-              </span>
+              {getMarketplaceLogo(product.marketplace)}
 
               {product.condition && (
                 <span
@@ -914,12 +1026,21 @@ const ProductDetailPage = () => {
                 )}
             </div>
 
-            {/* Sold Count */}
-            {product.sold_count && product.sold_count > 0 && (
-              <div className="flex items-center text-gray-600 text-sm">
-                <span className="font-medium">
-                  {product.sold_count.toLocaleString()} sold
-                </span>
+            {/* Sold Count or New Item Badge */}
+            {product.sold_count !== undefined && (
+              <div className="flex items-center text-sm">
+                {product.sold_count > 0 ? (
+                  <span className="text-gray-600 font-medium">
+                    {product.sold_count.toLocaleString()} sold
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                    <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.293l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd" />
+                    </svg>
+                    New listing
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -927,17 +1048,28 @@ const ProductDetailPage = () => {
           {/* Wishlist Message Display */}
           {wishlistMessage && (
             <div
-              className={`wishlist-message mb-4 p-3 rounded-lg border ${
+              className={`wishlist-notification mb-4 p-4 rounded-lg border-2 shadow-lg ${
                 wishlistMessage.type === "success"
-                  ? "bg-green-50 border-green-200 text-green-800"
-                  : "bg-red-50 border-red-200 text-red-800"
+                  ? "bg-green-100 border-green-300 text-green-900"
+                  : "bg-red-100 border-red-300 text-red-900"
               }`}
+              style={{ 
+                zIndex: 1000, 
+                position: 'relative',
+                minHeight: '60px',
+                display: 'flex',
+                alignItems: 'center',
+                opacity: 1,
+                visibility: 'visible'
+              }}
             >
-              <div className="flex items-center">
-                <span className="mr-2">
+              <div className="flex items-center font-semibold w-full">
+                <span className="mr-3 text-lg">
                   {wishlistMessage.type === "success" ? "✅" : "❌"}
                 </span>
-                {wishlistMessage.text}
+                <span className="flex-1">
+                  {wishlistMessage.text || "Item added to wishlist successfully!"}
+                </span>
               </div>
             </div>
           )}
@@ -950,32 +1082,40 @@ const ProductDetailPage = () => {
               rel="noopener noreferrer"
               className="w-full bg-primary text-white py-3 px-4 rounded text-center font-medium hover:bg-blue-700 transition-colors block"
             >
-              View on{" "}
-              {product.marketplace.charAt(0).toUpperCase() +
-                product.marketplace.slice(1)}
+              View on {getOfficialMarketplaceName(product.marketplace)}
             </a>
 
-            {/* Enhanced Wishlist Button */}
+            {/* Enhanced Wishlist Toggle Button */}
             <button
-              onClick={handleAddToWishlist}
-              disabled={isAddingToWishlist || isInWishlist}
-              className={`w-full py-3 px-4 rounded text-center font-medium transition-colors ${
+              onClick={isInWishlist ? handleRemoveFromWishlist : handleAddToWishlist}
+              disabled={isAddingToWishlist}
+              className={`w-full py-3 px-4 rounded text-center font-medium transition-all duration-300 ${
                 isInWishlist
-                  ? "bg-green-50 border border-green-200 text-green-800 cursor-not-allowed"
+                  ? "bg-green-50 border border-green-200 text-green-800 hover:bg-red-50 hover:border-red-200 hover:text-red-800"
                   : isAddingToWishlist
                   ? "bg-gray-100 border border-gray-300 text-gray-500 cursor-not-allowed"
                   : "border border-primary text-primary hover:bg-primary hover:text-white"
               }`}
+              title={
+                isInWishlist
+                  ? "Click to remove from wishlist"
+                  : isAddingToWishlist
+                  ? "Processing..."
+                  : isAuthenticated
+                  ? "Add to wishlist"
+                  : "Login required to add to wishlist"
+              }
             >
               {isAddingToWishlist ? (
                 <div className="flex items-center justify-center">
                   <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-primary mr-2"></div>
-                  Adding to Wishlist...
+                  {isInWishlist ? "Removing..." : "Adding..."}
                 </div>
               ) : isInWishlist ? (
-                <div className="flex items-center justify-center">
-                  <span className="mr-2">✓</span>
-                  Already in Wishlist
+                <div className="flex items-center justify-center group">
+                  <span className="mr-2 transition-transform group-hover:scale-110">❤️</span>
+                  <span className="group-hover:hidden">In Wishlist</span>
+                  <span className="hidden group-hover:inline">Click to Remove</span>
                 </div>
               ) : (
                 <div className="flex items-center justify-center">

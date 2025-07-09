@@ -343,16 +343,6 @@ const SearchResultsPage = () => {
    */
   const applyClientFilters = useCallback(
     (products) => {
-      console.log("Filtering", products.length, "products");
-      
-      // Debug first few products to see their structure
-      if (products.length > 0) {
-        console.log("Sample product structure:", {
-          keys: Object.keys(products[0]),
-          sampleProduct: products[0]
-        });
-      }
-      
       return products.filter((product, index) => {
         // Price range filter
         const minPrice = priceRange.min && priceRange.min !== "" ? parseFloat(priceRange.min) : 0;
@@ -377,20 +367,6 @@ const SearchResultsPage = () => {
         
         // Check if this specific product's marketplace is enabled
         const marketplaceAllowed = marketplaceFilters[productMarketplace] === true;
-
-        // Debug first few products
-        if (index < 3) {
-          console.log(`Product ${index}:`, {
-            title: product.title?.substring(0, 30),
-            originalMarketplace: product.marketplace,
-            normalizedMarketplace: productMarketplace,
-            price: productPrice,
-            priceInRange,
-            marketplaceAllowed,
-            marketplaceFilters,
-            anyMarketplaceEnabled
-          });
-        }
 
         // Category filter
         let categoryMatches = true;
@@ -521,13 +497,6 @@ const SearchResultsPage = () => {
       setCurrentPage(1);
       setHasMore(true);
 
-      console.log(
-        "Fetching initial products with query:",
-        query,
-        "sort:",
-        sortBy
-      );
-
       const searchQuery = query || category;
       
       // Parse price range values
@@ -543,18 +512,8 @@ const SearchResultsPage = () => {
         maxPrice
       );
 
-      console.log("Initial API Response:", response);
-      console.log("Raw products count:", (response.results || []).length);
-
       // Apply client-side filters to the results
       const filteredResults = applyClientFilters(response.results || []);
-      
-      console.log("Filtered products count:", filteredResults.length);
-      console.log("Filter states:", {
-        priceRange,
-        marketplaceFilters,
-        categoryFilter
-      });
 
       setProducts(filteredResults);
       setTotalItems(response.pagination?.total_items || 0);
@@ -580,7 +539,6 @@ const SearchResultsPage = () => {
 
     try {
       const nextPage = currentPage + 1;
-      console.log(`Fetching page ${nextPage} for query:`, query);
 
       const searchQuery = query || category;
       
@@ -596,8 +554,6 @@ const SearchResultsPage = () => {
         minPrice,
         maxPrice
       );
-
-      console.log(`Page ${nextPage} API Response:`, response);
 
       // Apply client-side filters to new results
       const filteredNewResults = applyClientFilters(response.results || []);
@@ -779,12 +735,6 @@ const SearchResultsPage = () => {
         return sortedProducts.sort((a, b) => {
           const priceA = parseFloat(a.sale_price || a.original_price || 0);
           const priceB = parseFloat(b.sale_price || b.original_price || 0);
-          
-          // Debug for price_high sorting only when we have filtered products
-          if (sortedProducts.length < 20) {
-            console.log(`🔍 Price High Sort - ${a.title?.substring(0, 20)} ($${priceA}) vs ${b.title?.substring(0, 20)} ($${priceB})`);
-          }
-          
           return priceB - priceA;
         });
         

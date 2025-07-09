@@ -1,16 +1,103 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
-import { wishlistService } from "../../api/apiServices";
+import { useWishlist } from "../../contexts/WishlistContext";
 import { getImageUrl, getFallbackImageUrl } from "../../utils/simpleImageProxy";
 
 const ProductCard = ({ product, isWishlistContext = false, customButton = null }) => {
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
+  const { isInWishlist: checkIsInWishlist, addToWishlist, wishlistItems } = useWishlist();
 
   // Local state for wishlist operations
   const [isAddingToWishlist, setIsAddingToWishlist] = useState(false);
-  const [isInWishlist, setIsInWishlist] = useState(isWishlistContext);
+  const [isInWishlist, setIsInWishlist] = useState(isWishlistContext || false);
+
+  // Check if item is in wishlist when component mounts or wishlist changes
+  useEffect(() => {
+    if (!isAuthenticated || !product?.product_id || !product?.marketplace || isWishlistContext) {
+      return;
+    }
+
+    const inWishlist = checkIsInWishlist(product.product_id, product.marketplace);
+    setIsInWishlist(inWishlist);
+  }, [isAuthenticated, product?.product_id, product?.marketplace, isWishlistContext, checkIsInWishlist, wishlistItems]);
+
+  // Listen for wishlist updates from other components
+  useEffect(() => {
+    const handleWishlistUpdate = (event) => {
+      const { action, product: updatedProduct, productId, marketplace } = event.detail;
+      
+      // Check if this update affects our product
+      const isOurProduct = (updatedProduct?.product_id === product?.product_id && updatedProduct?.marketplace === product?.marketplace) ||
+                           (productId === product?.product_id && marketplace === product?.marketplace);
+      
+      if (isOurProduct) {
+        setIsInWishlist(action === 'added');
+      }
+    };
+
+    window.addEventListener('wishlistUpdated', handleWishlistUpdate);
+    
+    return () => {
+      window.removeEventListener('wishlistUpdated', handleWishlistUpdate);
+    };
+  }, [product?.product_id, product?.marketplace]);
+
+  // Get marketplace logo component
+  const getMarketplaceLogo = (marketplace) => {
+    const marketplaceName = marketplace?.toLowerCase();
+    
+    switch (marketplaceName) {
+      case 'aliexpress':
+        return (
+          <div className="flex items-center bg-white px-2 py-1 rounded shadow-sm border border-gray-200">
+            <span className="text-xs font-bold text-orange-500">AliExpress</span>
+          </div>
+        );
+      case 'ebay':
+        return (
+          <div className="flex items-center bg-white px-2 py-1 rounded shadow-sm border border-gray-200">
+            <span className="text-xs font-bold text-blue-600">e</span>
+            <span className="text-xs font-bold text-red-500">b</span>
+            <span className="text-xs font-bold text-yellow-500">a</span>
+            <span className="text-xs font-bold text-green-500">y</span>
+          </div>
+        );
+      case 'amazon':
+        return (
+          <div className="flex items-center bg-white px-2 py-1 rounded shadow-sm border border-gray-200">
+            <span className="text-xs font-bold text-gray-900">amazon</span>
+            <svg className="w-3 h-2 ml-1" viewBox="0 0 100 30" fill="currentColor">
+              <path d="M60 20c-10 8-25 12-37 12-18 0-33-7-45-18-1-1 0-2 1-1 15 8 33 13 52 13 13 0 27-3 40-8 2-1 3 1 1 2z" fill="#FF9900"/>
+              <path d="M63 17c-1-2-8-1-11-1-1 0-1-1 0-1 8-1 20 0 21 1 1 1 0 8-4 11 0 1-1 0-1 0 3-4 4-8 3-10z" fill="#FF9900"/>
+            </svg>
+          </div>
+        );
+      case 'walmart':
+        return (
+          <div className="flex items-center bg-white px-2 py-1 rounded shadow-sm border border-gray-200">
+            <div className="w-3 h-3 mr-1">
+              <svg viewBox="0 0 100 100" fill="#0071ce">
+                <circle cx="50" cy="25" r="8"/>
+                <circle cx="25" cy="43" r="8"/>
+                <circle cx="75" cy="43" r="8"/>
+                <circle cx="25" cy="75" r="8"/>
+                <circle cx="75" cy="75" r="8"/>
+                <circle cx="50" cy="93" r="8"/>
+              </svg>
+            </div>
+            <span className="text-xs font-bold text-blue-600">Walmart</span>
+          </div>
+        );
+      default:
+        return (
+          <div className="flex items-center bg-gray-800 text-white px-2 py-1 rounded border border-gray-600">
+            <span className="text-xs font-medium capitalize">{marketplace || 'Unknown'}</span>
+          </div>
+        );
+    }
+  };
 
   // Handle adding product to wishlist
   const handleAddToWishlist = useCallback(
@@ -52,7 +139,7 @@ const ProductCard = ({ product, isWishlistContext = false, customButton = null }
         return;
       }
 
-      if (!product || isAddingToWishlist) return;
+      if (!product || isAddingToWishlist || isInWishlist) return;
 
       try {
         setIsAddingToWishlist(true);
@@ -69,14 +156,14 @@ const ProductCard = ({ product, isWishlistContext = false, customButton = null }
           affiliate_link: product.affiliate_link,
         };
 
-        await wishlistService.addToWishlist(wishlistData);
-
-        setIsInWishlist(true);
+        await addToWishlist(wishlistData);
 
         // Could show a toast notification here
         console.log(`"${product.title}" added to wishlist!`);
       } catch (error) {
         console.error("Error adding to wishlist:", error);
+        
+        // No need to revert since we're not doing optimistic updates here
 
         if (
           error.message.includes("401") ||
@@ -99,7 +186,7 @@ const ProductCard = ({ product, isWishlistContext = false, customButton = null }
         setIsAddingToWishlist(false);
       }
     },
-    [isAuthenticated, product, isAddingToWishlist, navigate, isWishlistContext]
+    [isAuthenticated, product, isAddingToWishlist, navigate, isWishlistContext, isInWishlist, addToWishlist]
   );
 
   // Format price with proper currency
@@ -165,10 +252,10 @@ const ProductCard = ({ product, isWishlistContext = false, customButton = null }
             }}
           />
 
-          {/* Marketplace badge */}
-          <span className="absolute top-2 left-2 bg-gray-800 text-white px-2 py-1 rounded text-xs font-medium capitalize">
-            {product.marketplace}
-          </span>
+          {/* Marketplace logo badge */}
+          <div className="absolute top-2 left-2">
+            {getMarketplaceLogo(product.marketplace)}
+          </div>
 
           {/* Discount badge */}
           {discount > 0 && (
@@ -225,10 +312,21 @@ const ProductCard = ({ product, isWishlistContext = false, customButton = null }
             </div>
           )}
 
-          {/* Sold Count */}
-          {product.sold_count && product.sold_count > 0 && (
-            <div className="text-gray-500 text-xs mb-2">
-              {product.sold_count.toLocaleString()} sold
+          {/* Sold Count or New Item Badge */}
+          {product.sold_count !== undefined && (
+            <div className="text-xs mb-2">
+              {product.sold_count > 0 ? (
+                <span className="text-gray-500">
+                  {product.sold_count.toLocaleString()} sold
+                </span>
+              ) : (
+                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                  <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.293l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd" />
+                  </svg>
+                  New listing
+                </span>
+              )}
             </div>
           )}
         </div>
