@@ -608,7 +608,7 @@ const WishlistPage = () => {
           </div>
 
           {/* Wishlist grid */}
-          <div className="wishlist-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="wishlist-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
             {wishlistItems.map((item) => {
               const isRemoving = removingItems.has(item.id);
               const isSelected = selectedItems.has(item.id);

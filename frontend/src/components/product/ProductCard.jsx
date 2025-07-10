@@ -234,14 +234,14 @@ const ProductCard = ({ product, isWishlistContext = false, customButton = null }
   );
 
   return (
-    <div className="product-card bg-white rounded-lg shadow-md overflow-hidden transform transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:-translate-y-1">
+    <div className="product-card h-full bg-white rounded-lg shadow-md overflow-hidden flex flex-col transform transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:-translate-y-1">
       {/* Product Link - Wraps the clickable area */}
       <Link
         to={`/product/${product.marketplace}/${product.product_id}`}
-        className="block"
+        className="flex flex-col flex-grow"
       >
-        {/* Product Image */}
-        <div className="relative h-48 overflow-hidden bg-white">
+        {/* Product Image - Fixed height */}
+        <div className="relative h-48 flex-shrink-0 overflow-hidden bg-white">
           <img
             src={getImageUrl(product.image)}
             alt={product.title}
@@ -265,70 +265,79 @@ const ProductCard = ({ product, isWishlistContext = false, customButton = null }
           )}
         </div>
 
-        {/* Product Info */}
-        <div className="p-4">
-          {/* Title */}
-          <h3 className="font-semibold text-gray-800 mb-2 line-clamp-2 hover:text-primary transition-colors">
+        {/* Product Info - Flex grow to fill space */}
+        <div className="p-4 flex flex-col flex-grow">
+          {/* Title - Fixed height with ellipsis */}
+          <h3 className="font-semibold text-gray-800 mb-2 h-12 line-clamp-2 hover:text-primary transition-colors" title={product.title}>
             {product.title}
           </h3>
 
-          {/* Price */}
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center space-x-2">
-              <span className="text-xl font-bold text-green-600">
-                {formatPrice(product.sale_price)}
-              </span>
-              {product.original_price &&
-                product.original_price !== product.sale_price && (
-                  <span className="text-sm text-gray-500 line-through">
-                    {formatPrice(product.original_price)}
-                  </span>
-                )}
-            </div>
-          </div>
-
-          {/* Rating */}
-          {product.rating && (
-            <div className="flex items-center mb-3">
-              <div className="flex">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <svg
-                    key={star}
-                    className={`w-4 h-4 ${
-                      star <= Math.floor(product.rating)
-                        ? "text-yellow-400"
-                        : "text-gray-300"
-                    }`}
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-                  </svg>
-                ))}
+          {/* Price section - Push to bottom */}
+          <div className="mt-auto">
+            {/* Price */}
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center space-x-2">
+                <span className="text-xl font-bold text-green-600">
+                  {formatPrice(product.sale_price)}
+                </span>
+                {product.original_price &&
+                  product.original_price !== product.sale_price && (
+                    <span className="text-sm text-gray-500 line-through">
+                      {formatPrice(product.original_price)}
+                    </span>
+                  )}
               </div>
-              <span className="text-gray-600 text-sm ml-1">
-                {product.rating.toFixed(1)}
-              </span>
             </div>
-          )}
 
-          {/* Sold Count or New Item Badge */}
-          {product.sold_count !== undefined && (
-            <div className="text-xs mb-2">
-              {product.sold_count > 0 ? (
-                <span className="text-gray-500">
-                  {product.sold_count.toLocaleString()} sold
-                </span>
+            {/* Rating - Fixed height */}
+            <div className="h-6 flex items-center mb-2">
+              {product.rating ? (
+                <>
+                  <div className="flex">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <svg
+                        key={star}
+                        className={`w-4 h-4 ${
+                          star <= Math.floor(product.rating)
+                            ? "text-yellow-400"
+                            : "text-gray-300"
+                        }`}
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                      </svg>
+                    ))}
+                  </div>
+                  <span className="text-gray-600 text-sm ml-1">
+                    {product.rating.toFixed(1)}
+                  </span>
+                </>
               ) : (
-                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                  <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.293l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd" />
-                  </svg>
-                  New listing
-                </span>
+                <span className="text-gray-400 text-sm">No ratings yet</span>
               )}
             </div>
-          )}
+
+            {/* Sold Count or New Item Badge - Fixed height */}
+            <div className="h-6 text-xs">
+              {product.sold_count !== undefined ? (
+                product.sold_count > 0 ? (
+                  <span className="text-gray-500">
+                    {product.sold_count.toLocaleString()} sold
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.293l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd" />
+                    </svg>
+                    New listing
+                  </span>
+                )
+              ) : (
+                <span className="text-gray-400">-</span>
+              )}
+            </div>
+          </div>
         </div>
       </Link>
 

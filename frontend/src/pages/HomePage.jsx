@@ -125,7 +125,7 @@ const HomePage = () => {
 
         {/* Loading State */}
         {isLoading && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
             {[...Array(6)].map((_, index) => (
               <div
                 key={index}
@@ -175,7 +175,7 @@ const HomePage = () => {
 
         {/* Success State - Show Products */}
         {!isLoading && !error && featuredProducts.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
             {featuredProducts.map((product) => (
               <div key={product.product_id} className="featured-product">
                 <ProductCard product={product} />
