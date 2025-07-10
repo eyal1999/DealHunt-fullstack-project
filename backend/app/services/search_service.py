@@ -324,6 +324,62 @@ def search_products(query: str, page_no: int = 1, page_size: int = None) -> List
                 sold_count = int(p.get("lastest_volume", 0))
             except (ValueError, TypeError):
                 sold_count = 0
+            
+            # Extract rating - try multiple possible field names from AliExpress API
+            rating = None
+            rating_fields = [
+                "evaluate_rate", "avg_rating", "rating", "star_rating", 
+                "product_rating", "average_star", "evaluation_rate"
+            ]
+            
+            # DEBUG: Log rating extraction (remove this after confirming it works)
+            # if len(summaries) < 2:  # Only log for first couple items to avoid spam
+            #     available_fields = list(p.keys())
+            #     print(f"🔍 AliExpress item fields: {available_fields}")
+                
+            for field in rating_fields:
+                if field in p and p[field] is not None:
+                    try:
+                        # Handle string values that might contain percentages or other formatting
+                        raw_value = str(p[field]).strip()
+                        
+                        # Remove percentage sign if present
+                        if raw_value.endswith('%'):
+                            raw_value = raw_value[:-1]
+                        
+                        # Remove any other non-numeric characters except decimal point
+                        import re
+                        numeric_value = re.sub(r'[^\d.]', '', raw_value)
+                        
+                        if not numeric_value:
+                            continue
+                            
+                        rating_value = float(numeric_value)
+                        # print(f"✅ Found AliExpress rating: {field} = {rating_value} (original: {p[field]})")
+                        
+                        # AliExpress ratings might be in different scales
+                        if field == "evaluate_rate" and rating_value > 5:
+                            # evaluate_rate is usually a percentage (0-100), convert to 5-star scale
+                            rating = (rating_value / 100) * 5
+                            # print(f"🔄 Converted {rating_value}% to {rating} stars")
+                        elif rating_value > 5:
+                            # If rating is out of 100, convert to 5-star scale
+                            rating = (rating_value / 100) * 5
+                            # print(f"🔄 Converted {rating_value}% to {rating} stars")
+                        elif rating_value > 0:
+                            # Assume it's already in 5-star scale
+                            rating = rating_value
+                            # print(f"✅ Using rating as-is: {rating} stars")
+                        
+                        # Ensure rating is within valid range (0-5)
+                        if 0 <= rating <= 5:
+                            break
+                        else:
+                            rating = None
+                            # print(f"❌ Rating {rating_value} out of valid range")
+                    except (ValueError, TypeError) as e:
+                        # print(f"❌ Error converting {field}={p[field]} to float: {e}")
+                        continue
 
             summary = ProductSummary(
                 product_id=product_id,
@@ -334,7 +390,8 @@ def search_products(query: str, page_no: int = 1, page_size: int = None) -> List
                 detail_url=detail_url,
                 affiliate_link=link_map.get(detail_url, detail_url),
                 marketplace="aliexpress",
-                sold_count=sold_count, 
+                sold_count=sold_count,
+                rating=rating,
             ).dict()
             
             summaries.append(summary)

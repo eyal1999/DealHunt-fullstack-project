@@ -216,6 +216,7 @@ const WishlistPage = () => {
 
   // Transform wishlist item to ProductCard format
   const transformWishlistItemForProductCard = useCallback((item) => {
+
     return {
       product_id: item.product_id,
       title: item.title,
@@ -225,8 +226,8 @@ const WishlistPage = () => {
       detail_url: `/product/${item.marketplace}/${item.product_id}`,
       affiliate_link: item.affiliate_link,
       marketplace: item.marketplace,
-      rating: null, // Not stored in wishlist
-      sold_count: null, // Not stored in wishlist
+      rating: item.rating || null, // Try to use actual rating if available
+      sold_count: item.sold_count || null, // Try to use actual sold count if available
     };
   }, []);
 

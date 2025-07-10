@@ -248,6 +248,50 @@ def search_products_ebay_single_page(query: str, page: int = 1, min_price: float
                     except (ValueError, TypeError):
                         continue
             
+            # Extract rating - try multiple possible field names from eBay API
+            rating = None
+            rating_fields = [
+                "averageStarRating", "starRating", "rating", "averageRating",
+                "reviewRating", "feedbackRating", "sellerFeedbackRating"
+            ]
+            
+            # DEBUG: Log available fields for rating analysis (disabled after testing)
+            # if len(results) < 2:  # Only log for first couple items to avoid spam
+            #     available_fields = list(i.keys())
+            #     print(f"🔍 eBay item fields: {available_fields}")
+                
+            for field in rating_fields:
+                if field in i and i[field] is not None:
+                    try:
+                        rating = float(i[field])
+                        # print(f"✅ Found eBay rating: {field} = {rating}")
+                        # Ensure rating is within valid range (0-5)
+                        if 0 <= rating <= 5:
+                            break
+                        else:
+                            rating = None
+                    except (ValueError, TypeError):
+                        continue
+            
+            # If no direct rating, check nested objects
+            if rating is None:
+                # Check seller feedback
+                seller_info = i.get("seller", {})
+                if isinstance(seller_info, dict):
+                    for field in ["feedbackPercentage", "positiveFeedbackPercent", "feedbackScore"]:
+                        if field in seller_info and seller_info[field] is not None:
+                            try:
+                                feedback = float(seller_info[field])
+                                if field in ["feedbackPercentage", "positiveFeedbackPercent"]:
+                                    # Convert percentage (0-100) to star rating (0-5)
+                                    rating = (feedback / 100) * 5
+                                elif field == "feedbackScore":
+                                    # Normalize feedback score to 0-5 range (rough estimate)
+                                    rating = min(5.0, max(0.0, feedback / 1000 * 5))
+                                break
+                            except (ValueError, TypeError):
+                                continue
+            
             try:
                 product = ProductSummary(
                     product_id=i["itemId"],
@@ -259,6 +303,7 @@ def search_products_ebay_single_page(query: str, page: int = 1, min_price: float
                     affiliate_link=affiliate_link,
                     marketplace="ebay",
                     sold_count=sold_count,
+                    rating=rating,
                 )
                 results.append(product.model_dump())
             except Exception as validation_error:

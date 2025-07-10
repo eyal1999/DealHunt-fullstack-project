@@ -15,8 +15,8 @@ try:
     import uvicorn
     print("✓ Uvicorn imported successfully")
     
-    print("Starting server on port 8003...")
-    uvicorn.run(app, host="127.0.0.1", port=8003, reload=False)
+    print("Starting server on port 8001...")
+    uvicorn.run(app, host="127.0.0.1", port=8001, reload=False)
     
 except Exception as e:
     print(f"ERROR: {e}")

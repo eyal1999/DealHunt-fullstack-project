@@ -36,7 +36,7 @@ class EmailService:
         if frontend_url is None:
             # Reload environment variables to get latest values
             load_dotenv()
-            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5000")
         
         reset_link = f"{frontend_url}/reset-password?token={reset_token}"
         
@@ -144,7 +144,7 @@ This is an automated email. Please do not reply to this message.
             print(f"🔗 Reset Link: {reset_link}")
             return True  # Return True for development to continue the flow
 
-    async def send_price_drop_notification(self, email: str, items: list, frontend_url: str = "http://localhost:3000"):
+    async def send_price_drop_notification(self, email: str, items: list, frontend_url: str = "http://localhost:5000"):
         """Send price drop notification email to user."""
         wishlist_link = f"{frontend_url}/wishlist"
         total_savings = sum(item.get('savings', 0) for item in items)

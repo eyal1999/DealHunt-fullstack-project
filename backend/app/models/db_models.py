@@ -65,6 +65,10 @@ class UserInDB(BaseModel):
     # Email notification preferences
     email_notifications: bool = True
     price_drop_notifications: bool = True
+    
+    # User activity and preferences
+    search_history: List[str] = Field(default_factory=list)
+    updated_at: Optional[datetime] = None
 
 class User(BaseModel):
     """Model for user data returned to client (public data only)."""

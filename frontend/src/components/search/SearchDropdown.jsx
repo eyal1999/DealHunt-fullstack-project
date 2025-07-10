@@ -64,7 +64,7 @@ const SearchDropdown = ({
       if (!dropdownRef.current?.contains(document.activeElement)) {
         setIsOpen(false);
       }
-    }, 150);
+    }, 200);
   };
 
   // Handle input change
@@ -79,11 +79,18 @@ const SearchDropdown = ({
 
   // Handle suggestion click
   const handleSuggestionClick = (suggestion) => {
+    // Close dropdown and update query first
+    setIsOpen(false);
     onQueryChange(suggestion);
+    
+    // Add to history and navigate
     addToHistory(suggestion);
     onSearch(suggestion);
-    setIsOpen(false);
-    inputRef.current?.blur();
+    
+    // Blur input after a short delay
+    setTimeout(() => {
+      inputRef.current?.blur();
+    }, 50);
   };
 
   // Handle form submit
@@ -203,7 +210,10 @@ const SearchDropdown = ({
                   className={`px-4 py-2 cursor-pointer hover:bg-gray-50 flex items-center justify-between group ${
                     selectedIndex === index ? 'bg-blue-50' : ''
                   }`}
-                  onClick={() => handleSuggestionClick(item)}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    handleSuggestionClick(item);
+                  }}
                 >
                   <div className="flex items-center space-x-3">
                     <svg 
