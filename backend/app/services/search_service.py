@@ -13,7 +13,7 @@ from app.models.models import ProductSummary, ProductDetail, PromotionLink
 
 # ------------------------------------------------------------------ constants
 _HEADERS = {"Content-Type": "application/x-www-form-urlencoded;charset=utf-8"}
-MAX_PRODUCTS_PER_PAGE = 12      # AliExpress actual limit is 12 products per call
+MAX_PRODUCTS_PER_PAGE = 50      # AliExpress API supports up to 50 products per call
 MAX_AFFILIATE_LINKS_PER_CALL = 50  # AliExpress allows up to 50 URLs per affiliate link call
 
 # Search configuration - single page fetching for on-demand loading
@@ -245,13 +245,15 @@ def generate_affiliate_links_batch(source_urls: List[str]) -> List[PromotionLink
     return all_links
 
 # ---------------------------------------------------------------- search
-def search_products(query: str, page_no: int = 1, page_size: int = None) -> List[dict]:
+def search_products(query: str, page_no: int = 1, page_size: int = None, min_price: float = None, max_price: float = None) -> List[dict]:
     """Return a list of ProductSummary dicts sorted by recent sales volume.
     
     Args:
         query: Search keywords
         page_no: Page number (1-based)
         page_size: Number of products per page (max 50)
+        min_price: Minimum price filter in USD
+        max_price: Maximum price filter in USD
     """
     if page_size is None:
         page_size = MAX_PRODUCTS_PER_PAGE
@@ -269,6 +271,16 @@ def search_products(query: str, page_no: int = 1, page_size: int = None) -> List
             "tracking_id": settings.tracking_id,
         }
     )
+    
+    # Add price filtering parameters if provided
+    # AliExpress API expects prices in cents
+    if min_price is not None:
+        params["min_sale_price"] = int(min_price * 100)  # Convert dollars to cents
+        print(f"🔍 AliExpress API: Adding min_sale_price={params['min_sale_price']} cents (${min_price})")
+    if max_price is not None:
+        params["max_sale_price"] = int(max_price * 100)  # Convert dollars to cents
+        print(f"🔍 AliExpress API: Adding max_sale_price={params['max_sale_price']} cents (${max_price})")
+    
     params["sign"] = make_signature(params, settings.app_secret)
 
     resp = requests.post(settings.base_url, data=params, headers=_HEADERS, timeout=(5, 15))
@@ -403,13 +415,15 @@ def search_products(query: str, page_no: int = 1, page_size: int = None) -> List
     return summaries
 
 
-def search_products_multi_page(query: str, max_pages: int = None, page_size: int = None) -> List[dict]:
+def search_products_multi_page(query: str, max_pages: int = None, page_size: int = None, min_price: float = None, max_price: float = None) -> List[dict]:
     """Search for products across multiple pages to get thousands of results.
     
     Args:
         query: Search keywords
         max_pages: Maximum number of pages to fetch (default: 25 for ~300 total results)
         page_size: Number of products per page (AliExpress limit: 12)
+        min_price: Minimum price filter in USD
+        max_price: Maximum price filter in USD
     
     Returns:
         List of ProductSummary dicts from all pages combined
@@ -434,7 +448,7 @@ def search_products_multi_page(query: str, max_pages: int = None, page_size: int
             if page > 1:
                 time.sleep(0.1)  # 100ms delay between requests
             
-            products = search_products(query, page_no=page, page_size=page_size)
+            products = search_products(query, page_no=page, page_size=page_size, min_price=min_price, max_price=max_price)
             
             if not products:
                 consecutive_empty_pages += 1

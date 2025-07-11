@@ -4,6 +4,7 @@ from typing import List
 from app.providers import search as provider_search, detail as provider_detail
 from app.models.models import SearchResponse, ProductDetail
 from app.errors import AliexpressError, EbayError
+from app.cache import failure_tracker
 
 router = APIRouter(prefix="/search", tags=["Search"])
 
@@ -75,7 +76,9 @@ def search_products(
     page: int = Query(1, ge=1, description="Page number (starts from 1)"),
     page_size: int = Query(50, ge=1, le=200, description="Items per page (1-200)"),
     min_price: float = Query(None, ge=0, description="Minimum price filter"),
-    max_price: float = Query(None, ge=0, description="Maximum price filter")
+    max_price: float = Query(None, ge=0, description="Maximum price filter"),
+    aliexpress: bool = Query(True, description="Include AliExpress results"),
+    ebay: bool = Query(True, description="Include eBay results")
 ):
     """Search for products across all supported marketplaces with pagination."""
     # Validate sort parameter
@@ -97,9 +100,23 @@ def search_products(
     if min_price is not None and max_price is not None and min_price > max_price:
         raise HTTPException(status_code=400, detail="Minimum price cannot be greater than maximum price")
 
+    # Validate marketplace selection
+    if not aliexpress and not ebay:
+        raise HTTPException(status_code=400, detail="At least one marketplace must be selected")
+
     try:
         # Search across all providers with page-based loading and price filtering
-        all_results = provider_search(query, page=page, min_price=min_price, max_price=max_price)
+        search_result = provider_search(query, page=page, min_price=min_price, max_price=max_price, 
+                                        aliexpress=aliexpress, ebay=ebay)
+        
+        # Extract results and pagination state from the new response format
+        if isinstance(search_result, dict):
+            all_results = search_result.get("results", [])
+            pagination_state = search_result.get("pagination_state", {})
+        else:
+            # Backward compatibility - treat as list of results
+            all_results = search_result if isinstance(search_result, list) else []
+            pagination_state = {}
         
         # Validate results structure
         if not isinstance(all_results, list):
@@ -111,11 +128,27 @@ def search_products(
         # Apply pagination
         paginated_data = _paginate_results(sorted_items, page, page_size)
         
-        # Return response with pagination info
+        # Enhanced pagination info with failure tracking
+        pagination_info = paginated_data["pagination"]
+        
+        # Add failure tracking information from provider search
+        if pagination_state:
+            pagination_info.update({
+                "end_of_results": pagination_state.get("end_of_results", False),
+                "consecutive_failures": pagination_state.get("consecutive_failures", 0),
+                "retry_suggested": pagination_state.get("retry_suggested", False),
+                "failure_reason": pagination_state.get("failure_reason", None)
+            })
+            
+            # If we've reached end of results, adjust has_next
+            if pagination_state.get("end_of_results", False):
+                pagination_info["has_next"] = False
+        
+        # Return response with enhanced pagination info
         return SearchResponse(
             query=query,
             results=paginated_data["items"],
-            pagination=paginated_data["pagination"]
+            pagination=pagination_info
         )
         
     except AliexpressError as e:
@@ -174,3 +207,45 @@ def get_product_detail(
             status_code=500,
             detail="Product detail service temporarily unavailable. Please try again later."
         )
+
+@router.post("/retry")
+def retry_search(
+    q: str = Query(..., min_length=1, description="Search query to retry"),
+    page: int = Query(..., ge=1, description="Page number to retry"),
+    min_price: float = Query(None, ge=0, description="Minimum price filter"),
+    max_price: float = Query(None, ge=0, description="Maximum price filter"),
+    aliexpress: bool = Query(True, description="Include AliExpress results"),
+    ebay: bool = Query(True, description="Include eBay results")
+):
+    """Reset failure tracking for a specific search query and page, allowing pagination to continue."""
+    if not q or not q.strip():
+        raise HTTPException(status_code=400, detail="Search query cannot be empty")
+    
+    query = q.strip()
+    
+    # Create the same filters key used in provider search
+    price_suffix = ""
+    if min_price is not None or max_price is not None:
+        price_suffix = f":price:{min_price or 0}-{max_price or 'inf'}"
+    
+    marketplace_suffix = ""
+    marketplaces = []
+    if aliexpress:
+        marketplaces.append("ae")
+    if ebay:
+        marketplaces.append("eb")
+    if marketplaces:
+        marketplace_suffix = f":markets:{''.join(marketplaces)}"
+    
+    filters_key = f"{price_suffix}{marketplace_suffix}"
+    
+    # Clear failure tracking for this search
+    failure_tracker.record_success(query, page, filters_key)
+    
+    return {
+        "message": f"Failure tracking cleared for query '{query}' on page {page}",
+        "query": query,
+        "page": page,
+        "filters": filters_key,
+        "status": "ready_to_retry"
+    }

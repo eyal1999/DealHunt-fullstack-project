@@ -12,6 +12,11 @@ class PaginationInfo(BaseModel):
     total_pages: int = Field(..., description="Total number of pages")
     has_next: bool = Field(..., description="Whether there are more pages after current")
     has_previous: bool = Field(..., description="Whether there are pages before current")
+    # Failure tracking for pagination
+    end_of_results: bool = Field(False, description="Whether we've reached the end of available results")
+    consecutive_failures: int = Field(0, description="Number of consecutive failed attempts")
+    retry_suggested: bool = Field(False, description="Whether a retry is suggested for failed pagination")
+    failure_reason: Optional[str] = Field(None, description="Reason for pagination failure (e.g., filters too restrictive)")
 
 # ── Search / detail payloads ────────────────────────────────────
 class ProductSummary(BaseModel):

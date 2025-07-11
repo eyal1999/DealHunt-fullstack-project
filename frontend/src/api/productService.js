@@ -18,7 +18,9 @@ const productService = {
     page = 1,
     pageSize = 20,
     minPrice = null,
-    maxPrice = null
+    maxPrice = null,
+    aliexpress = true,
+    ebay = true
   ) => {
     try {
       const params = {
@@ -35,6 +37,10 @@ const productService = {
       if (maxPrice !== null && maxPrice !== undefined && maxPrice >= 0) {
         params.max_price = maxPrice;
       }
+      
+      // Add marketplace filters
+      params.aliexpress = aliexpress;
+      params.ebay = ebay;
       
       return await api.get("/search/", params);
     } catch (error) {

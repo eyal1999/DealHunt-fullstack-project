@@ -49,6 +49,7 @@ const SearchResultsPage = () => {
   // ====== UI STATE ======
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [error, setError] = useState(null);
+  
 
   // ====== FILTER STATE ======
   // Initialize filter states from URL parameters
@@ -509,7 +510,9 @@ const SearchResultsPage = () => {
         1, // page = 1 for initial load
         50, // LARGER page size to handle thousands of results efficiently
         minPrice,
-        maxPrice
+        maxPrice,
+        marketplaceFilters.aliexpress,
+        marketplaceFilters.ebay
       );
 
       // Apply client-side filters to the results
@@ -518,6 +521,7 @@ const SearchResultsPage = () => {
       setProducts(filteredResults);
       setTotalItems(response.pagination?.total_items || 0);
       setHasMore(response.pagination?.has_next || false);
+      
     } catch (err) {
       console.error("Error fetching initial products:", err);
       setError(err.message || "Failed to fetch products. Please try again.");
@@ -526,7 +530,7 @@ const SearchResultsPage = () => {
     } finally {
       setIsInitialLoading(false);
     }
-  }, [query, category, sortBy, priceRange.min, priceRange.max, applyClientFilters]);
+  }, [query, category, sortBy, priceRange.min, priceRange.max, marketplaceFilters.aliexpress, marketplaceFilters.ebay, applyClientFilters]);
 
   /**
    * Fetch more products for infinite scrolling
@@ -537,9 +541,15 @@ const SearchResultsPage = () => {
       return;
     }
 
-    try {
-      const nextPage = currentPage + 1;
+    // Add reasonable page limit to prevent infinite loops
+    const nextPage = currentPage + 1;
+    if (nextPage > 30) {
+      console.log('📍 Pagination stopped: Maximum page limit reached (30)');
+      setHasMore(false);
+      return;
+    }
 
+    try {
       const searchQuery = query || category;
       
       // Parse price range values
@@ -552,8 +562,20 @@ const SearchResultsPage = () => {
         nextPage,
         50, // Same larger page size for efficiency
         minPrice,
-        maxPrice
+        maxPrice,
+        marketplaceFilters.aliexpress,
+        marketplaceFilters.ebay
       );
+
+      // Check if backend indicates end of results
+      const paginationState = response.pagination_state || {};
+      
+      // If backend indicates end of results, stop pagination
+      if (paginationState.end_of_results) {
+        console.log('📍 Backend indicates end of results');
+        setHasMore(false);
+        return;
+      }
 
       // Apply client-side filters to new results
       const filteredNewResults = applyClientFilters(response.results || []);
@@ -561,12 +583,16 @@ const SearchResultsPage = () => {
       // Append filtered results to existing products
       setProducts((prevProducts) => [...prevProducts, ...filteredNewResults]);
       setCurrentPage(nextPage);
+      
+      // Update hasMore based on backend response
       setHasMore(response.pagination?.has_next || false);
+      
     } catch (err) {
       console.error("Error fetching more products:", err);
+      
       throw err; // Re-throw for useInfiniteScroll to handle
     }
-  }, [query, category, sortBy, currentPage, hasMore, priceRange.min, priceRange.max, applyClientFilters]);
+  }, [query, category, sortBy, currentPage, hasMore, priceRange.min, priceRange.max, marketplaceFilters.aliexpress, marketplaceFilters.ebay, applyClientFilters]);
 
   // ====== INFINITE SCROLL HOOK ======
 
@@ -714,6 +740,7 @@ const SearchResultsPage = () => {
     setError(null);
     fetchInitialProducts();
   };
+  
 
   // ====== DERIVED VALUES ======
 
