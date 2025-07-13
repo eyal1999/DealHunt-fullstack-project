@@ -12,6 +12,7 @@ import { useWishlist } from "../contexts/WishlistContext";
 import { useAutoWishlist } from "../hooks/useAutoWishlist";
 import { getImageUrl, getFallbackImageUrl } from "../utils/simpleImageProxy";
 import { initProductPageAnimations } from "../utils/scrollReveal";
+import ProductRecommendations from "../components/recommendations/ProductRecommendations";
 
 // Simple Image Component for Product Details
 const ProductImage = ({
@@ -1223,6 +1224,12 @@ const ProductDetailPage = () => {
             )}
         </div>
       </div>
+
+      {/* Product Recommendations Section */}
+      <ProductRecommendations 
+        product={product} 
+        marketplace={product.marketplace} 
+      />
     </div>
   );
 };

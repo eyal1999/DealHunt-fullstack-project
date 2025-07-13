@@ -15,8 +15,149 @@ from app.models.recommendations import (
 from app.services.recommendation_service import RecommendationService
 from app.db import db as database
 
+# Dynamic import for AliExpress recommendations to avoid circular dependencies
+def get_aliexpress_service():
+    try:
+        from app.services.aliexpress_recommendations import AliExpressRecommendationService
+        return AliExpressRecommendationService
+    except Exception as e:
+        print(f"AliExpress recommendations service not available: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+# Fallback function if service is not available
+def get_mock_recommendations(product_id: str, product_title: str, rec_type: str = "similar", limit: int = 4):
+    """Return empty recommendations if service is unavailable."""
+    return {
+        "success": True,
+        "count": 0,
+        "recommendations": []
+    }
+
+def get_mock_comprehensive_recommendations(product_id: str):
+    """Return empty comprehensive recommendations if service is unavailable."""
+    return {
+        "success": True,
+        "product_id": product_id,
+        "total_count": 0,
+        "recommendations": {
+            "similar_products": {
+                "count": 0,
+                "products": []
+            },
+            "trending_in_category": {
+                "count": 0,
+                "products": []
+            },
+            "price_alternatives": {
+                "count": 0,
+                "products": []
+            }
+        }
+    }
+
 
 router = APIRouter(prefix="/recommendations", tags=["AI Recommendations"])
+
+
+# Simple test endpoint to verify router is working
+@router.get("/test")
+async def test_router():
+    """Simple test to verify the recommendations router is working."""
+    return {
+        "status": "success",
+        "message": "Recommendations router is working!",
+        "timestamp": "2024-01-01"
+    }
+
+
+# Debug endpoint to check service status
+@router.get("/debug/status")
+async def get_recommendations_debug_status():
+    """Debug endpoint to check the status of the recommendations service."""
+    try:
+        AliExpressService = get_aliexpress_service()
+        service_available = AliExpressService is not None
+        
+        # Try to get dependency status
+        dependency_status = {}
+        try:
+            from app.services.aliexpress_recommendations import HAS_DEPENDENCIES
+            dependency_status["HAS_DEPENDENCIES"] = HAS_DEPENDENCIES
+        except Exception as e:
+            dependency_status["import_error"] = str(e)
+        
+        # Test keyword extraction
+        test_results = {}
+        if service_available:
+            try:
+                keywords = AliExpressService.extract_keywords_from_title("Test Wireless Bluetooth Earbuds")
+                test_results["keyword_extraction"] = {
+                    "success": True,
+                    "keywords": keywords
+                }
+            except Exception as e:
+                test_results["keyword_extraction"] = {
+                    "success": False,
+                    "error": str(e)
+                }
+        
+        return {
+            "service_available": service_available,
+            "dependency_status": dependency_status,
+            "test_results": test_results,
+            "debug_info": {
+                "python_path": "/recommendations service status",
+                "timestamp": "debug_check"
+            }
+        }
+    except Exception as e:
+        return {
+            "service_available": False,
+            "error": str(e),
+            "debug_info": {
+                "error_type": type(e).__name__
+            }
+        }
+
+
+@router.get("/debug/test-simple")
+async def test_simple_recommendations():
+    """Simple test endpoint for recommendations without authentication."""
+    try:
+        AliExpressService = get_aliexpress_service()
+        
+        if not AliExpressService:
+            return {
+                "success": False,
+                "error": "Service not available",
+                "fallback_used": True
+            }
+        
+        # Try to get simple similar products
+        test_title = "Wireless Bluetooth Headphones"
+        test_products = AliExpressService.get_similar_products(
+            product_id="test_123",
+            product_title=test_title,
+            category="electronics",
+            limit=2
+        )
+        
+        return {
+            "success": True,
+            "test_title": test_title,
+            "results_count": len(test_products),
+            "sample_results": test_products[:2] if test_products else [],
+            "message": "This is a test of the recommendations service"
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "error_type": type(e).__name__
+        }
 
 
 def get_recommendation_service() -> RecommendationService:
@@ -358,3 +499,152 @@ async def get_recommendation_insights(
     }
     
     return insights
+
+
+# NEW: AliExpress-specific real-time recommendations endpoints
+@router.get("/aliexpress/similar/{product_id}")
+async def get_aliexpress_similar_products(
+    product_id: str,
+    product_title: str = Query(..., description="Product title for keyword extraction"),
+    category: Optional[str] = Query(None, description="Product category"),
+    limit: int = Query(8, le=15, description="Number of similar products to return")
+):
+    """Get AliExpress products similar to the given product using real API data."""
+    try:
+        AliExpressService = get_aliexpress_service()
+        if not AliExpressService:
+            return get_mock_recommendations(product_id, product_title, "similar", limit)
+        
+        similar_products = AliExpressService.get_similar_products(
+            product_id=product_id,
+            product_title=product_title,
+            category=category,
+            limit=limit
+        )
+        
+        return {
+            "success": True,
+            "count": len(similar_products),
+            "recommendations": similar_products
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get similar products: {str(e)}"
+        )
+
+
+@router.get("/aliexpress/trending/{category}")
+async def get_aliexpress_trending_in_category(
+    category: str,
+    limit: int = Query(8, le=20, description="Number of trending products to return")
+):
+    """Get trending AliExpress products in a specific category using hot products API."""
+    try:
+        AliExpressService = get_aliexpress_service()
+        if not AliExpressService:
+            return get_mock_recommendations(category, category, "trending", limit)
+        
+        trending_products = AliExpressService.get_trending_in_category(
+            category_name=category,
+            limit=limit
+        )
+        
+        return {
+            "success": True,
+            "category": category,
+            "count": len(trending_products),
+            "recommendations": trending_products
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get trending products: {str(e)}"
+        )
+
+
+@router.get("/aliexpress/price-alternatives")
+async def get_aliexpress_price_alternatives(
+    current_price: float = Query(..., description="Current product price"),
+    product_title: str = Query(..., description="Product title for keyword extraction"),
+    price_range_percent: float = Query(0.3, le=0.5, description="Price variance (0.3 = 30%)"),
+    limit: int = Query(8, le=15, description="Number of alternatives to return")
+):
+    """Get AliExpress products with similar functionality but different price points."""
+    try:
+        AliExpressService = get_aliexpress_service()
+        if not AliExpressService:
+            return get_mock_recommendations("", product_title, "alternatives", limit)
+        
+        price_alternatives = AliExpressService.get_price_alternatives(
+            current_price=current_price,
+            product_title=product_title,
+            price_range_percent=price_range_percent,
+            limit=limit
+        )
+        
+        return {
+            "success": True,
+            "price_range": {
+                "original": current_price,
+                "min": current_price * (1 - price_range_percent),
+                "max": current_price * (1 + price_range_percent)
+            },
+            "count": len(price_alternatives),
+            "recommendations": price_alternatives
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get price alternatives: {str(e)}"
+        )
+
+
+@router.get("/aliexpress/comprehensive/{product_id}")
+async def get_aliexpress_comprehensive_recommendations(
+    product_id: str,
+    product_title: str = Query(..., description="Product title for keyword extraction"),
+    current_price: float = Query(..., description="Current product price"),
+    category: Optional[str] = Query(None, description="Product category"),
+    limit_per_type: int = Query(4, le=8, description="Number of recommendations per type")
+):
+    """Get comprehensive AliExpress recommendations including similar products, trending items, and price alternatives."""
+    try:
+        AliExpressService = get_aliexpress_service()
+        if not AliExpressService:
+            return get_mock_comprehensive_recommendations(product_id)
+        
+        recommendations = AliExpressService.get_comprehensive_recommendations(
+            product_id=product_id,
+            product_title=product_title,
+            current_price=current_price,
+            category=category,
+            limit_per_type=limit_per_type
+        )
+        
+        total_recommendations = sum(len(products) for products in recommendations.values())
+        
+        return {
+            "success": True,
+            "product_id": product_id,
+            "total_count": total_recommendations,
+            "recommendations": {
+                "similar_products": {
+                    "count": len(recommendations['similar_products']),
+                    "products": recommendations['similar_products']
+                },
+                "trending_in_category": {
+                    "count": len(recommendations['trending_in_category']),
+                    "products": recommendations['trending_in_category']
+                },
+                "price_alternatives": {
+                    "count": len(recommendations['price_alternatives']),
+                    "products": recommendations['price_alternatives']
+                }
+            }
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get comprehensive recommendations: {str(e)}"
+        )
