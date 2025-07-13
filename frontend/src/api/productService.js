@@ -68,77 +68,72 @@ const productService = {
   },
 
   /**
-   * Get featured/trending products for homepage
+   * Get featured/trending products for homepage using Mixed Hot Products API
    * @param {number} limit - Number of products to fetch (default: 6)
-   * @returns {Promise} - Promise that resolves to featured products
+   * @param {number} page - Page number for pagination (default: 1) 
+   * @param {string} marketplace - Marketplace filter: 'mixed', 'aliexpress', or 'ebay'
+   * @param {boolean} useCache - Whether to use caching (default: true)
+   * @returns {Promise} - Promise that resolves to featured deals
    */
-  getFeaturedProducts: async (limit = 6) => {
+  getFeaturedProducts: async (limit = 6, page = 1, marketplace = 'mixed', useCache = true) => {
     try {
-      // Check cache first (30 minute cache - reduced frequency for more variety)
-      const cacheKey = `featured_products_${limit}`;
-      const cachedData = localStorage.getItem(cacheKey);
-      const cacheTimestamp = localStorage.getItem(`${cacheKey}_timestamp`);
+      // Check cache first (30 minutes cache for better UX)
+      const cacheKey = `featured_deals_${limit}_${page}_${marketplace}`;
       
-      if (cachedData && cacheTimestamp) {
-        const now = Date.now();
-        const cacheAge = now - parseInt(cacheTimestamp);
-        const cacheExpiry = 30 * 60 * 1000; // 30 minutes for more variety
+      if (useCache) {
+        const cachedData = localStorage.getItem(cacheKey);
+        const cacheTimestamp = localStorage.getItem(`${cacheKey}_timestamp`);
         
-        if (cacheAge < cacheExpiry) {
-          console.log('Using cached featured products');
-          return JSON.parse(cachedData);
+        if (cachedData && cacheTimestamp) {
+          const now = Date.now();
+          const cacheAge = now - parseInt(cacheTimestamp);
+          const cacheExpiry = 30 * 60 * 1000; // 30 minutes cache
+          
+          if (cacheAge < cacheExpiry) {
+            console.log(`Using cached featured deals: page ${page}, marketplace ${marketplace}`);
+            return JSON.parse(cachedData);
+          }
         }
       }
 
-      // Rotate through different categories and sorting methods for variety
-      const categories = ['electronics', 'home', 'fashion', 'sports', 'books', 'beauty'];
-      const sortMethods = ['sold_high', 'price_low', 'price_high'];
-      
-      // Use current hour to create a rotating selection that changes throughout the day
-      const hour = new Date().getHours();
-      const categoryIndex = hour % categories.length;
-      const sortIndex = Math.floor(hour / 8) % sortMethods.length; // Changes every 8 hours
-      
-      const searchTerm = categories[categoryIndex];
-      const sortMethod = sortMethods[sortIndex];
-      
-      // Get more results than needed to allow for shuffling
-      const fetchLimit = Math.min(limit * 3, 50);
-      
-      // Search for products
-      const response = await api.get("/search", {
-        q: searchTerm,
-        sort: sortMethod,
-        page: 1,
-        page_size: fetchLimit,
+      // Fetch hot products from the enhanced API endpoint
+      console.log(`Fetching ${limit} featured deals (page ${page}, ${marketplace}) from hot products API`);
+      const response = await api.get("/search/featured-deals", {
+        limit: limit,
+        page: page,
+        marketplace: marketplace
       });
-
-      let products = response.results || [];
-      
-      // Shuffle the results and take only the requested limit for variety
-      products = products.sort(() => Math.random() - 0.5).slice(0, limit);
 
       const result = {
         success: true,
-        products: products,
-        searchTerm: searchTerm,
-        sortMethod: sortMethod
+        products: response.deals || [],
+        count: response.count || 0,
+        page: response.page || page,
+        hasNextPage: response.has_next_page || false,
+        marketplace: response.marketplace || marketplace,
+        source: response.source,
+        message: response.message
       };
 
-      // Cache the result
-      localStorage.setItem(cacheKey, JSON.stringify(result));
-      localStorage.setItem(`${cacheKey}_timestamp`, Date.now().toString());
+      // Cache the result if we got products and caching is enabled
+      if (useCache && result.products.length > 0) {
+        localStorage.setItem(cacheKey, JSON.stringify(result));
+        localStorage.setItem(`${cacheKey}_timestamp`, Date.now().toString());
+        console.log(`Cached ${result.products.length} featured deals (page ${page})`);
+      }
 
       return result;
     } catch (error) {
-      console.error("Error fetching featured products:", error);
+      console.error("Error fetching featured deals:", error);
       
       // Try to return cached data even if expired
-      const cacheKey = `featured_products_${limit}`;
-      const cachedData = localStorage.getItem(cacheKey);
-      if (cachedData) {
-        console.log('Using expired cache as fallback');
-        return JSON.parse(cachedData);
+      if (useCache) {
+        const cacheKey = `featured_deals_${limit}_${page}_${marketplace}`;
+        const cachedData = localStorage.getItem(cacheKey);
+        if (cachedData) {
+          console.log('Using expired cache as fallback for featured deals');
+          return JSON.parse(cachedData);
+        }
       }
       
       throw error;

@@ -13,6 +13,41 @@ const ProductCard = ({ product, isWishlistContext = false, customButton = null }
   // Local state for wishlist operations
   const [isAddingToWishlist, setIsAddingToWishlist] = useState(false);
   const [isInWishlist, setIsInWishlist] = useState(isWishlistContext || false);
+  
+  // Image loading state management
+  const [imageState, setImageState] = useState('loading'); // loading, loaded, error
+  const [currentImageSrc, setCurrentImageSrc] = useState('');
+  const [retryCount, setRetryCount] = useState(0);
+  const MAX_RETRIES = 1;
+
+  // Initialize image loading
+  useEffect(() => {
+    if (product?.image) {
+      setImageState('loading');
+      setCurrentImageSrc(getImageUrl(product.image));
+      setRetryCount(0);
+    } else {
+      // No image provided, go straight to error state
+      setImageState('error');
+    }
+  }, [product?.image]);
+
+  // Handle image loading success
+  const handleImageLoad = useCallback(() => {
+    setImageState('loaded');
+  }, []);
+
+  // Handle image loading error with retry logic
+  const handleImageError = useCallback((e) => {
+    if (retryCount < MAX_RETRIES) {
+      // Try fallback image
+      setRetryCount(prev => prev + 1);
+      setCurrentImageSrc(getFallbackImageUrl());
+    } else {
+      // Final failure - show error state
+      setImageState('error');
+    }
+  }, [retryCount, MAX_RETRIES]);
 
   // Check if item is in wishlist when component mounts or wishlist changes
   useEffect(() => {
@@ -243,15 +278,40 @@ const ProductCard = ({ product, isWishlistContext = false, customButton = null }
       >
         {/* Product Image - Fixed height */}
         <div className="relative h-48 flex-shrink-0 overflow-hidden bg-white">
-          <img
-            src={getImageUrl(product.image)}
-            alt={product.title}
-            className="w-full h-full object-scale-down transform transition-transform duration-300 hover:scale-105"
-            loading="lazy"
-            onError={(e) => {
-              e.target.src = getFallbackImageUrl();
-            }}
-          />
+          {/* Loading spinner */}
+          {imageState === 'loading' && (
+            <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
+              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
+            </div>
+          )}
+          
+          {/* Error state */}
+          {imageState === 'error' && (
+            <div className="absolute inset-0 flex items-center justify-center bg-gray-100 text-gray-400">
+              <div className="text-center">
+                <svg className="mx-auto h-12 w-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <p className="text-xs">Image unavailable</p>
+              </div>
+            </div>
+          )}
+          
+          {/* Actual image */}
+          {currentImageSrc && (
+            <img
+              src={currentImageSrc}
+              alt=""
+              className={`w-full h-full object-scale-down ${
+                imageState === 'loaded' 
+                  ? 'transform transition-transform duration-300 hover:scale-105' 
+                  : 'opacity-0'
+              }`}
+              style={{ display: imageState === 'error' ? 'none' : 'block' }}
+              onLoad={handleImageLoad}
+              onError={handleImageError}
+            />
+          )}
 
           {/* Marketplace logo badge */}
           <div className="absolute top-2 left-2">

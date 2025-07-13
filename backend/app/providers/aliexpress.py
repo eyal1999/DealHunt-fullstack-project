@@ -112,10 +112,10 @@ def search(query: str, page: int = 1, min_price: float = None, max_price: float 
                             print(f"Reached target of {target_products} products, stopping pagination")
                             break
                     else:
-                        # For filtered searches, collect more products before stopping
-                        # Stop early only if we've collected a lot more than target
-                        if len(all_products) >= target_products * 3:
-                            print(f"Collected {len(all_products)} products for filtering, stopping pagination")
+                        # For filtered searches, API filtering works now
+                        # Just get the target amount since no client-side filtering needed
+                        if len(all_products) >= target_products:
+                            print(f"Reached target of {target_products} products with API filtering")
                             break
                 else:
                     consecutive_empty_pages += 1
@@ -132,38 +132,10 @@ def search(query: str, page: int = 1, min_price: float = None, max_price: float 
                 if consecutive_empty_pages >= 3:
                     break
         
-        # HYBRID FILTERING: Apply client-side validation as backup
-        # Since AliExpress API price filtering is unreliable, filter again client-side
-        raw_product_count = len(all_products)  # Store count before filtering
-        filtered_products = []
-        
+        # API filtering is now working properly with Advanced API access
+        # No need for client-side filtering anymore
         if min_price is not None or max_price is not None:
-            print(f"🔧 Applying client-side price validation (backup for unreliable API filtering)")
-            
-            for product in all_products:
-                # Get product price
-                price = product.get('sale_price')
-                if price is None:
-                    continue
-                    
-                try:
-                    price_float = float(price)
-                    
-                    # Apply price filters
-                    if min_price is not None and price_float < min_price:
-                        continue
-                    if max_price is not None and price_float > max_price:
-                        continue
-                        
-                    filtered_products.append(product)
-                    
-                except (ValueError, TypeError):
-                    # Skip products with invalid prices
-                    continue
-            
-            print(f"📊 Client-side filtering: {len(all_products)} → {len(filtered_products)} products " +
-                  f"(${min_price or 0}-${max_price or '∞'})")
-            all_products = filtered_products
+            print(f"✅ API filtering active: ${min_price or 0}-${max_price or '∞'} (found {len(all_products)} products)")
         
         # If we got very few results with filters, log a warning
         if (min_price is not None or max_price is not None) and len(all_products) < min_products_threshold:

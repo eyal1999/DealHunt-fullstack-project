@@ -9,7 +9,11 @@ const HomePage = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [featuredProducts, setFeaturedProducts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasNextPage, setHasNextPage] = useState(false);
+  const [selectedMarketplace, setSelectedMarketplace] = useState('mixed');
   const navigate = useNavigate();
 
   // Fetch featured products on component mount
@@ -18,9 +22,11 @@ const HomePage = () => {
       try {
         setError(null);
         
-        const response = await productService.getFeaturedProducts(6);
+        const response = await productService.getFeaturedProducts(6, 1, selectedMarketplace);
         setFeaturedProducts(response.products);
-        setIsLoading(false); // Only set loading false after successful fetch
+        setCurrentPage(response.page || 1);
+        setHasNextPage(response.hasNextPage || false);
+        setIsLoading(false);
       } catch (err) {
         console.error("Error fetching featured products:", err);
         setError("Failed to load featured products. Please try again later.");
@@ -33,7 +39,7 @@ const HomePage = () => {
 
     // Start loading immediately
     fetchFeaturedProducts();
-  }, []);
+  }, [selectedMarketplace]);
 
   // Initialize home page animations
   useEffect(() => {
@@ -47,20 +53,51 @@ const HomePage = () => {
     }
   };
 
+  // Load more featured products
+  const loadMoreProducts = async () => {
+    if (!hasNextPage || isLoadingMore) return;
+    
+    try {
+      setIsLoadingMore(true);
+      
+      const nextPage = currentPage + 1;
+      const response = await productService.getFeaturedProducts(6, nextPage, selectedMarketplace, false); // Don't use cache for load more
+      
+      // Append new products to existing ones
+      setFeaturedProducts(prev => [...prev, ...response.products]);
+      setCurrentPage(response.page || nextPage);
+      setHasNextPage(response.hasNextPage || false);
+      
+    } catch (err) {
+      console.error("Error loading more products:", err);
+      // Don't show error for load more failures, just stop loading
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+  
   // Retry loading featured products
   const retryFeaturedProducts = () => {
     const fetchFeaturedProducts = async () => {
       try {
         setIsLoading(true);
         setError(null);
+        setCurrentPage(1);
+        setFeaturedProducts([]); // Clear existing products
         
-        // Clear cache to force fresh data on retry
-        const cacheKey = 'featured_products_6';
-        localStorage.removeItem(cacheKey);
-        localStorage.removeItem(`${cacheKey}_timestamp`);
+        // Clear all related cache to force fresh hot deals
+        ['mixed', 'aliexpress', 'ebay'].forEach(marketplace => {
+          for (let page = 1; page <= 10; page++) {
+            const cacheKey = `featured_deals_6_${page}_${marketplace}`;
+            localStorage.removeItem(cacheKey);
+            localStorage.removeItem(`${cacheKey}_timestamp`);
+          }
+        });
         
-        const response = await productService.getFeaturedProducts(6);
+        const response = await productService.getFeaturedProducts(6, 1, selectedMarketplace, false);
         setFeaturedProducts(response.products);
+        setCurrentPage(response.page || 1);
+        setHasNextPage(response.hasNextPage || false);
       } catch (err) {
         console.error("Error fetching featured products:", err);
         setError("Failed to load featured products. Please try again later.");
@@ -71,6 +108,16 @@ const HomePage = () => {
     };
 
     fetchFeaturedProducts();
+  };
+  
+  // Handle marketplace filter change
+  const handleMarketplaceChange = (marketplace) => {
+    if (marketplace !== selectedMarketplace) {
+      setSelectedMarketplace(marketplace);
+      setCurrentPage(1);
+      setFeaturedProducts([]);
+      setError(null);
+    }
   };
 
   return (
@@ -117,10 +164,50 @@ const HomePage = () => {
         </div>
       </section>
 
-      {/* Featured Products */}
+      {/* Featured Hot Deals */}
       <section className="featured-section">
         <div className="mb-6">
-          <h2 className="text-2xl font-bold">Featured Deals</h2>
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center space-x-3">
+              <h2 className="text-2xl font-bold">🔥 Featured Hot Deals</h2>
+              <span className="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-bold animate-pulse">
+                TRENDING NOW
+              </span>
+            </div>
+            
+            {/* Marketplace Filter */}
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-gray-600 font-medium">From:</span>
+              <div className="flex bg-gray-100 rounded-lg p-1">
+                {[
+                  { value: 'mixed', label: '🌍 Mixed', desc: 'Best from both' },
+                  { value: 'aliexpress', label: '🔥 AliExpress', desc: 'Hot products' },
+                  { value: 'ebay', label: '⭐ eBay', desc: 'Trending items' }
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => handleMarketplaceChange(option.value)}
+                    disabled={isLoading}
+                    className={`px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                      selectedMarketplace === option.value
+                        ? 'bg-white text-primary shadow-sm'
+                        : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                    } disabled:opacity-50`}
+                    title={option.desc}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          
+          <p className="text-gray-600 mt-2">
+            Limited-time offers from trending products with the biggest discounts
+            {selectedMarketplace === 'mixed' && ' across multiple marketplaces'}
+            {selectedMarketplace === 'aliexpress' && ' from AliExpress hot products'}
+            {selectedMarketplace === 'ebay' && ' from eBay trending auctions'}
+          </p>
         </div>
 
         {/* Loading State */}
@@ -173,15 +260,60 @@ const HomePage = () => {
           </div>
         )}
 
-        {/* Success State - Show Products */}
+        {/* Success State - Show Hot Deals */}
         {!isLoading && !error && featuredProducts.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
-            {featuredProducts.map((product) => (
-              <div key={product.product_id} className="featured-product">
-                <ProductCard product={product} />
-              </div>
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
+              {featuredProducts.map((product, index) => (
+                <div key={`${product.product_id}-${product.marketplace}-${index}`} className="featured-product relative group">
+                  {/* Enhanced ProductCard for hot deals */}
+                  <div className="transform transition-transform duration-200 group-hover:scale-105">
+                    <ProductCard product={product} />
+                  </div>
+                  
+                  {/* Watch count information for eBay items */}
+                  {product.watch_count > 0 && product.marketplace === 'ebay' && (
+                    <div className="absolute bottom-2 right-2 z-10">
+                      <div className="bg-blue-500 text-white px-2 py-1 rounded text-xs font-bold shadow-lg">
+                        {product.watch_count} watching
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            
+            {/* Load More Section */}
+            <div className="mt-8 text-center">
+              {hasNextPage && (
+                <button
+                  onClick={loadMoreProducts}
+                  disabled={isLoadingMore}
+                  className="bg-gradient-to-r from-primary to-blue-700 text-white px-8 py-3 rounded-lg font-medium shadow-lg hover:shadow-xl transform transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                >
+                  {isLoadingMore ? (
+                    <div className="flex items-center space-x-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
+                      <span>Loading More Deals...</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center space-x-2">
+                      <span>🔥 Load More Hot Deals</span>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  )}
+                </button>
+              )}
+              
+              {!hasNextPage && featuredProducts.length >= 6 && (
+                <div className="text-gray-500 text-sm">
+                  ✨ You've seen all the hottest deals! Check back later for more.
+                </div>
+              )}
+            </div>
+          </>
         )}
 
         {/* Empty State */}
@@ -202,10 +334,10 @@ const HomePage = () => {
                 />
               </svg>
               <h3 className="text-lg font-medium text-gray-800 mb-2">
-                No Featured Products Available
+                No Hot Deals Available
               </h3>
               <p className="text-gray-600 mb-4">
-                Check back later for the latest deals and trending products.
+                Check back later for the latest trending deals with amazing discounts.
               </p>
               <button
                 onClick={retryFeaturedProducts}

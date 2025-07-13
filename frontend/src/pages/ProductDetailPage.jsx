@@ -401,6 +401,9 @@ const ProductDetailPage = () => {
   const [isAddingToWishlist, setIsAddingToWishlist] = useState(false);
   const [wishlistMessage, setWishlistMessage] = useState(null);
   const [isInWishlist, setIsInWishlist] = useState(false);
+  
+  // Prevent multiple animation initializations
+  const animationsInitialized = useRef(false);
 
   // Fetch product detail with proper error handling
   const fetchProductDetail = useCallback(async () => {
@@ -452,10 +455,46 @@ const ProductDetailPage = () => {
 
   // Initialize product page animations after product is loaded
   useEffect(() => {
-    if (product && !isLoading && !error) {
+    if (product && !isLoading && !error && !animationsInitialized.current) {
+      animationsInitialized.current = true;
+      
       // Small delay to ensure DOM is fully rendered
       const timer = setTimeout(() => {
         initProductPageAnimations();
+        
+        // Auto-fix ScrollReveal issues for eBay products
+        if (product.marketplace === 'ebay') {
+          setTimeout(() => {
+            const elements = ['.product-breadcrumbs', '.product-detail-content', '.product-images-section', '.product-info', '.product-sidebar'];
+            let needsFix = false;
+            
+            elements.forEach(selector => {
+              const el = document.querySelector(selector);
+              if (el) {
+                const computedStyle = window.getComputedStyle(el);
+                const hasRevealClass = el.classList.contains('sr-reveal');
+                const opacity = parseFloat(computedStyle.opacity);
+                
+                // If ScrollReveal failed (no sr-reveal class or opacity is not 1), mark for fix
+                if (!hasRevealClass || opacity < 1) {
+                  needsFix = true;
+                }
+              }
+            });
+            
+            // Fix elements if ScrollReveal failed
+            if (needsFix) {
+              elements.forEach(selector => {
+                const el = document.querySelector(selector);
+                if (el) {
+                  el.style.visibility = 'visible';
+                  el.style.opacity = '1';
+                  el.style.transform = 'none';
+                }
+              });
+            }
+          }, 500); // Check after animations should be complete
+        }
       }, 100);
       
       return () => clearTimeout(timer);

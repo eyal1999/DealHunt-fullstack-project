@@ -5,6 +5,7 @@ from app.providers import search as provider_search, detail as provider_detail
 from app.models.models import SearchResponse, ProductDetail
 from app.errors import AliexpressError, EbayError
 from app.cache import failure_tracker
+from app.services.hot_products_service import get_featured_deals, get_mixed_featured_deals
 
 router = APIRouter(prefix="/search", tags=["Search"])
 
@@ -197,7 +198,12 @@ def get_product_detail(
     except AliexpressError as e:
         raise HTTPException(status_code=503, detail=f"AliExpress service error: {str(e)}")
     except EbayError as e:
-        raise HTTPException(status_code=503, detail=f"eBay service error: {str(e)}")
+        # For eBay products that can't be fetched, provide more helpful error message
+        print(f"eBay detail failed for {marketplace}/{product_id}: {str(e)}")
+        raise HTTPException(
+            status_code=404, 
+            detail=f"eBay product details unavailable. Product may have been removed or ID format changed."
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"Invalid request: {str(e)}")
     except Exception as exc:
@@ -249,3 +255,82 @@ def retry_search(
         "filters": filters_key,
         "status": "ready_to_retry"
     }
+
+@router.get("/featured-deals")
+def get_featured_deals_endpoint(
+    limit: int = Query(12, ge=1, le=50, description="Maximum number of featured deals to return"),
+    page: int = Query(1, ge=1, le=10, description="Page number for pagination (1-10)"),
+    marketplace: str = Query("mixed", description="Marketplace filter: 'mixed', 'aliexpress', or 'ebay'")
+):
+    """
+    Get featured deals for homepage display with pagination support.
+    Supports both AliExpress and eBay hot products with mixed display.
+    
+    Args:
+        limit: Number of deals per page
+        page: Page number for pagination
+        marketplace: Which marketplace(s) to include
+    
+    Returns:
+        List of featured deal products with pagination info
+    """
+    try:
+        # Calculate offset for pagination
+        offset = (page - 1) * limit
+        
+        # Determine which marketplace(s) to fetch from
+        if marketplace.lower() == "aliexpress":
+            deals = get_featured_deals(limit=limit)
+            source = "AliExpress hot products"
+        elif marketplace.lower() == "ebay":
+            from app.services.ebay_hot_products_service import get_ebay_featured_deals
+            deals = get_ebay_featured_deals(limit=limit)
+            source = "eBay trending products"
+        else:  # mixed (default)
+            # For pagination with mixed results, we need to get more deals and slice
+            total_needed = page * limit
+            all_deals = get_mixed_featured_deals(limit=total_needed)
+            deals = all_deals[offset:offset + limit] if len(all_deals) > offset else []
+            source = "Mixed AliExpress + eBay hot products"
+        
+        # Add pagination metadata
+        has_next_page = len(deals) == limit and page < 10  # Limit to 10 pages max
+        
+        if not deals:
+            message = f"No more featured deals available" if page > 1 else "No featured deals available at the moment"
+            return {
+                "deals": [],
+                "count": 0,
+                "page": page,
+                "limit": limit,
+                "has_next_page": False,
+                "marketplace": marketplace,
+                "message": message
+            }
+        
+        return {
+            "deals": deals,
+            "count": len(deals),
+            "page": page,
+            "limit": limit,
+            "has_next_page": has_next_page,
+            "marketplace": marketplace,
+            "source": source,
+            "message": f"Featured deals loaded successfully (page {page})"
+        }
+        
+    except Exception as e:
+        print(f"Error fetching featured deals: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        # Don't fail the homepage, just return empty deals
+        return {
+            "deals": [],
+            "count": 0,
+            "page": page,
+            "limit": limit,
+            "has_next_page": False,
+            "marketplace": marketplace,
+            "message": "Featured deals temporarily unavailable"
+        }

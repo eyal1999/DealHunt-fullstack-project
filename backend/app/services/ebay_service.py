@@ -426,18 +426,65 @@ def search_products_ebay(query: str, max_pages: int = 20, min_price: float = Non
         raise EbayError(f"Failed to search eBay: {str(e)}")
 
 # ── DETAIL ─────────────────────────────────────────────────────
+def extract_ebay_item_id(item_id: str) -> str:
+    """Extract numeric item ID from complex eBay item ID formats like 'v1|336064091024|0'."""
+    if '|' in item_id:
+        parts = item_id.split('|')
+        if len(parts) >= 2:
+            return parts[1]  # Return the numeric part
+    return item_id  # Return as-is if no pipes found
+
 def fetch_product_detail_ebay(item_id: str) -> dict:
     try:
-        resp = requests.get(f"{settings.ebay_base_url}/buy/browse/v1/item/{item_id}",
-            headers=_get_headers(),timeout=(3, 10),)
+        # Try multiple ID formats to handle eBay API compatibility issues
+        id_formats_to_try = []
         
-        # If we get 401/403, try refreshing token once
-        if resp.status_code in [401, 403]:
-            ebay_token_manager.force_refresh()
-            resp = requests.get(f"{settings.ebay_base_url}/buy/browse/v1/item/{item_id}",
-                headers=_get_headers(),timeout=(3, 10),)
+        # Always try original ID first
+        id_formats_to_try.append(item_id)
         
-        resp.raise_for_status()
+        # If it's a complex ID, also try the extracted numeric part
+        if '|' in item_id:
+            clean_item_id = extract_ebay_item_id(item_id)
+            id_formats_to_try.append(clean_item_id)
+        
+        print(f"eBay detail lookup for: {item_id} (trying {len(id_formats_to_try)} ID formats)")
+        
+        resp = None
+        for i, id_to_try in enumerate(id_formats_to_try):
+            print(f"  Attempt {i+1}: {id_to_try}")
+            
+            try:
+                resp = requests.get(f"{settings.ebay_base_url}/buy/browse/v1/item/{id_to_try}",
+                    headers=_get_headers(),timeout=(3, 10),)
+                
+                # If we get 401/403, try refreshing token once
+                if resp.status_code in [401, 403]:
+                    ebay_token_manager.force_refresh()
+                    resp = requests.get(f"{settings.ebay_base_url}/buy/browse/v1/item/{id_to_try}",
+                        headers=_get_headers(),timeout=(3, 10),)
+                
+                # If successful, break and use this response
+                if resp.status_code == 200:
+                    print(f"  ✅ Success with ID format: {id_to_try}")
+                    break
+                elif resp.status_code == 404:
+                    print(f"  ❌ 404 with ID format: {id_to_try}")
+                    continue
+                else:
+                    print(f"  ⚠️ HTTP {resp.status_code} with ID format: {id_to_try}")
+                    continue
+                    
+            except Exception as e:
+                print(f"  ❌ Error with ID format {id_to_try}: {e}")
+                continue
+        
+        # If no format worked, raise the last response or a generic error
+        if not resp or resp.status_code != 200:
+            print(f"❌ All ID formats failed for eBay item: {item_id}")
+            if resp:
+                resp.raise_for_status()
+            else:
+                raise EbayError(f"eBay item not found with any ID format: {item_id}")
         
         item = resp.json()
         
