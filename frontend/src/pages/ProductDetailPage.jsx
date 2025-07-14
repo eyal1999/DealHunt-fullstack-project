@@ -11,7 +11,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useWishlist } from "../contexts/WishlistContext";
 import { useAutoWishlist } from "../hooks/useAutoWishlist";
 import { getImageUrl, getFallbackImageUrl } from "../utils/simpleImageProxy";
-import { initProductPageAnimations } from "../utils/scrollReveal";
+import { initProductPageAnimations, cleanupAnimations } from "../utils/scrollReveal";
 import ProductRecommendations from "../components/recommendations/ProductRecommendations";
 
 // Simple Image Component for Product Details
@@ -403,8 +403,6 @@ const ProductDetailPage = () => {
   const [wishlistMessage, setWishlistMessage] = useState(null);
   const [isInWishlist, setIsInWishlist] = useState(false);
   
-  // Prevent multiple animation initializations
-  const animationsInitialized = useRef(false);
 
   // Fetch product detail with proper error handling
   const fetchProductDetail = useCallback(async () => {
@@ -454,58 +452,52 @@ const ProductDetailPage = () => {
     }
   }, [wishlistMessage]);
 
-  // Reset animations when product ID changes
+  // Clean up and re-initialize animations when product changes
   useEffect(() => {
-    animationsInitialized.current = false;
-  }, [marketplace, id]);
-
-  // Initialize product page animations after product is loaded
-  useEffect(() => {
-    if (product && !isLoading && !error && !animationsInitialized.current) {
-      animationsInitialized.current = true;
+    if (product && !isLoading && !error) {
+      // Clean up previous animations
+      cleanupAnimations();
       
-      // Small delay to ensure DOM is fully rendered
+      // Small delay to ensure DOM is fully rendered and cleanup is complete
       const timer = setTimeout(() => {
         initProductPageAnimations();
         
-        // Auto-fix ScrollReveal issues for eBay products
-        if (product.marketplace === 'ebay') {
-          setTimeout(() => {
-            const elements = ['.product-breadcrumbs', '.product-detail-content', '.product-images-section', '.product-info', '.product-sidebar'];
-            let needsFix = false;
-            
+        // Auto-fix ScrollReveal issues for all products
+        setTimeout(() => {
+          const elements = ['.product-breadcrumbs', '.product-detail-content', '.product-images-section', '.product-info', '.product-sidebar'];
+          let needsFix = false;
+          
+          elements.forEach(selector => {
+            const el = document.querySelector(selector);
+            if (el) {
+              const computedStyle = window.getComputedStyle(el);
+              const hasRevealClass = el.classList.contains('sr-reveal');
+              const opacity = parseFloat(computedStyle.opacity);
+              
+              // If ScrollReveal failed (no sr-reveal class or opacity is not 1), mark for fix
+              if (!hasRevealClass || opacity < 1) {
+                needsFix = true;
+              }
+            }
+          });
+          
+          // Fix elements if ScrollReveal failed
+          if (needsFix) {
             elements.forEach(selector => {
               const el = document.querySelector(selector);
               if (el) {
-                const computedStyle = window.getComputedStyle(el);
-                const hasRevealClass = el.classList.contains('sr-reveal');
-                const opacity = parseFloat(computedStyle.opacity);
-                
-                // If ScrollReveal failed (no sr-reveal class or opacity is not 1), mark for fix
-                if (!hasRevealClass || opacity < 1) {
-                  needsFix = true;
-                }
+                el.style.visibility = 'visible';
+                el.style.opacity = '1';
+                el.style.transform = 'none';
               }
             });
-            
-            // Fix elements if ScrollReveal failed
-            if (needsFix) {
-              elements.forEach(selector => {
-                const el = document.querySelector(selector);
-                if (el) {
-                  el.style.visibility = 'visible';
-                  el.style.opacity = '1';
-                  el.style.transform = 'none';
-                }
-              });
-            }
-          }, 500); // Check after animations should be complete
-        }
+          }
+        }, 1000); // Increased delay to ensure animations complete
       }, 100);
       
       return () => clearTimeout(timer);
     }
-  }, [product, isLoading, error]);
+  }, [product, isLoading, error, marketplace, id]); // Added marketplace and id as dependencies
 
   // Check if product is already in wishlist (when user is authenticated)
   useEffect(() => {

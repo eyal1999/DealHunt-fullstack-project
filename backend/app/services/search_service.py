@@ -55,7 +55,6 @@ def _extract_description_from_page(product_url: str) -> Optional[str]:
         Extracted description text or None if extraction fails
     """
     try:
-        print(f"🔍 Attempting to scrape description from: {product_url}")
         
         # Add a small delay to be respectful to the server
         time.sleep(1)
@@ -120,17 +119,13 @@ def _extract_description_from_page(product_url: str) -> Optional[str]:
             if len(description_text) > 1000:
                 description_text = description_text[:1000] + "..."
             
-            print(f"✅ Successfully extracted description ({len(description_text)} chars)")
             return description_text
         
-        print("⚠️ No description found using any selector")
         return None
         
     except requests.RequestException as e:
-        print(f"❌ Network error while scraping description: {e}")
         return None
     except Exception as e:
-        print(f"❌ Error extracting description: {e}")
         return None
 
 # ---------------------------------------------------------------- affiliate links
@@ -174,7 +169,6 @@ def generate_affiliate_links(
         resp.raise_for_status()
     except requests.exceptions.RequestException as e:
         # FIX: Handle network errors gracefully
-        print(f"Failed to generate affiliate links: {e}")
         return []  # Return empty list instead of crashing
 
     wrapper = resp.json().get("aliexpress_affiliate_link_generate_response", {})
@@ -182,7 +176,6 @@ def generate_affiliate_links(
     
     if block.get("resp_code") != 200:
         # FIX: Don't crash on API errors, just return empty list
-        print(f"Link-gen API error {block.get('resp_code')}: {block.get('resp_msg')}")
         return []
 
     links_raw = (
@@ -207,7 +200,6 @@ def generate_affiliate_links(
                 )
         except Exception as e:
             # FIX: Log specific errors for debugging
-            print(f"Failed to create PromotionLink from {raw}: {e}")
             continue
 
     return promo_links
@@ -276,10 +268,8 @@ def search_products(query: str, page_no: int = 1, page_size: int = None, min_pri
     # AliExpress API expects prices in cents
     if min_price is not None:
         params["min_sale_price"] = int(min_price * 100)  # Convert dollars to cents
-        print(f"🔍 AliExpress API: Adding min_sale_price={params['min_sale_price']} cents (${min_price})")
     if max_price is not None:
         params["max_sale_price"] = int(max_price * 100)  # Convert dollars to cents
-        print(f"🔍 AliExpress API: Adding max_sale_price={params['max_sale_price']} cents (${max_price})")
     
     params["sign"] = make_signature(params, settings.app_secret)
 
@@ -426,7 +416,6 @@ def search_products(query: str, page_no: int = 1, page_size: int = None, min_pri
             summaries.append(summary)
             
         except Exception as e:
-            print(f"Error processing product {p.get('product_id', 'unknown')}: {e}")
             continue
             
     return summaries
@@ -457,7 +446,6 @@ def search_products_multi_page(query: str, max_pages: int = None, page_size: int
     all_products = []
     consecutive_empty_pages = 0
     
-    print(f"🔍 Starting multi-page search for '{query}' - fetching up to {max_pages} pages")
     
     for page in range(1, max_pages + 1):
         try:
@@ -469,30 +457,24 @@ def search_products_multi_page(query: str, max_pages: int = None, page_size: int
             
             if not products:
                 consecutive_empty_pages += 1
-                print(f"📭 Page {page}: No products found (consecutive empty: {consecutive_empty_pages})")
                 
                 # Stop if we get 3 consecutive empty pages
                 if consecutive_empty_pages >= 3:
-                    print(f"🛑 Stopping search after {consecutive_empty_pages} consecutive empty pages")
                     break
                 continue
             else:
                 consecutive_empty_pages = 0  # Reset counter
                 
-            print(f"📦 Page {page}: Found {len(products)} products")
             all_products.extend(products)
             
         except Exception as e:
-            print(f"❌ Error fetching page {page}: {e}")
             consecutive_empty_pages += 1
             
             # Stop if we get too many errors
             if consecutive_empty_pages >= 5:
-                print(f"🛑 Stopping search after {consecutive_empty_pages} consecutive failures")
                 break
             continue
     
-    print(f"✅ Multi-page search completed: {len(all_products)} total products from {query}")
     return all_products
 
 # ---------------------------------------------------------------- product detail

@@ -87,12 +87,38 @@ export const WishlistProvider = ({ children }) => {
   // Add item to wishlist
   const addToWishlist = useCallback(async (productData) => {
     try {
+      // Optimistic update: immediately add to local state
+      const optimisticItem = {
+        id: `temp-${Date.now()}`, // Temporary ID
+        product_id: productData.product_id,
+        marketplace: productData.marketplace,
+        title: productData.title,
+        original_price: productData.original_price,
+        sale_price: productData.sale_price,
+        image: productData.image,
+        detail_url: productData.detail_url,
+        affiliate_link: productData.affiliate_link,
+        added_at: new Date().toISOString(),
+        last_checked_price: null,
+        price_history: []
+      };
+      
+      // Add optimistically to current items
+      const updatedItems = [...wishlistItems, optimisticItem];
+      setWishlistItems(updatedItems);
+      
       const result = await wishlistService.addToWishlist(productData);
       
-      // Silent refresh to get the new item without UI disruption
-      await fetchWishlist(true, true);
+      // Replace optimistic item with actual item from API response
+      if (result && result.id) {
+        setWishlistItems(prev => prev.map(item => 
+          item.id === optimisticItem.id 
+            ? { ...result, ...productData } // Use API result with product data
+            : item
+        ));
+      }
       
-      // Dispatch event for other components
+      // Dispatch event for other components AFTER API success
       window.dispatchEvent(new CustomEvent('wishlistUpdated', { 
         detail: { action: 'added', product: productData } 
       }));
@@ -107,29 +133,27 @@ export const WishlistProvider = ({ children }) => {
       return result;
     } catch (error) {
       console.error('WishlistContext: Error adding to wishlist:', error);
+      
+      // Revert optimistic update on error by removing the optimistic item
+      setWishlistItems(prev => prev.filter(item => item.id !== optimisticItem.id));
+      
       throw error;
     }
-  }, [fetchWishlist]);
+  }, [fetchWishlist, wishlistItems]);
 
   // Remove item from wishlist
   const removeFromWishlist = useCallback(async (itemId) => {
     try {
       // Find the item that will be removed BEFORE the API call
-      const removedItem = wishlistItemsRef.current.find(item => item.id === itemId);
+      const removedItem = wishlistItems.find(item => item.id === itemId);
       
       // Optimistic update: immediately remove from local state
-      const updatedItems = wishlistItemsRef.current.filter(item => item.id !== itemId);
+      const updatedItems = wishlistItems.filter(item => item.id !== itemId);
       setWishlistItems(updatedItems);
       
       const result = await wishlistService.removeFromWishlist(itemId);
       
-      // Ensure the optimistic update sticks
-      setWishlistItems(prev => prev.filter(item => item.id !== itemId));
-      
-      // Silent refresh after removal to avoid UI flash
-      await fetchWishlist(true, true);
-      
-      // Dispatch event for other components
+      // Dispatch event for other components AFTER API success
       window.dispatchEvent(new CustomEvent('wishlistUpdated', { 
         detail: { 
           action: 'removed', 
@@ -150,26 +174,28 @@ export const WishlistProvider = ({ children }) => {
     } catch (error) {
       console.error('WishlistContext: Error removing from wishlist:', error);
       
-      // Revert optimistic update on error (silent to avoid UI flash)
-      await fetchWishlist(true, true);
+      // Revert optimistic update on error by re-adding the item
+      if (removedItem) {
+        setWishlistItems(prev => [...prev, removedItem]);
+      }
       
       throw error;
     }
-  }, [fetchWishlist]);
+  }, [fetchWishlist, wishlistItems]);
 
   // Check if item is in wishlist
   const isInWishlist = useCallback((productId, marketplace) => {
-    return wishlistItemsRef.current.some(
+    return wishlistItems.some(
       item => item.product_id === productId && item.marketplace === marketplace
     );
-  }, []);
+  }, [wishlistItems]);
 
   // Get wishlist item by product ID and marketplace
   const getWishlistItem = useCallback((productId, marketplace) => {
-    return wishlistItemsRef.current.find(
+    return wishlistItems.find(
       item => item.product_id === productId && item.marketplace === marketplace
     );
-  }, []);
+  }, [wishlistItems]);
 
   // Initial fetch when authenticated
   useEffect(() => {

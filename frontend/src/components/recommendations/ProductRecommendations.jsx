@@ -67,10 +67,27 @@ const ProductRecommendations = ({
       // Fetch AliExpress recommendations if original product is from AliExpress
       if (marketplace === 'aliexpress') {
         try {
+          // Validate required parameters
+          const productId = product.product_id;
+          const title = product.title;
+          const price = product.sale_price || product.original_price;
+          
+          if (!productId || !title || !price) {
+            console.warn('Missing required parameters for AliExpress recommendations');
+            return;
+          }
+          
+          // Ensure price is a valid number
+          const numericPrice = parseFloat(price);
+          if (isNaN(numericPrice) || numericPrice <= 0) {
+            console.warn('Invalid price for AliExpress recommendations:', price);
+            return;
+          }
+          
           const aliResponse = await fetch(
-            `/api/recommendations/aliexpress/comprehensive/${product.product_id}?` +
-            `product_title=${encodeURIComponent(product.title)}&` +
-            `current_price=${product.sale_price || product.original_price}&` +
+            `/api/recommendations/aliexpress/comprehensive/${productId}?` +
+            `product_title=${encodeURIComponent(title)}&` +
+            `current_price=${numericPrice}&` +
             `category=${encodeURIComponent(category)}&` +
             `limit_per_type=15`,
             {
@@ -80,7 +97,7 @@ const ProductRecommendations = ({
 
           if (aliResponse.ok) {
             const aliData = await aliResponse.json();
-            if (aliData.success) {
+            if (aliData.success && aliData.recommendations && aliData.recommendations.similar_products) {
               // Add only similar products
               const similarProducts = aliData.recommendations.similar_products.products.map(p => ({
                 ...p,
@@ -90,6 +107,8 @@ const ProductRecommendations = ({
               
               recommendations.push(...similarProducts);
             }
+          } else {
+            console.warn('AliExpress recommendations API returned error:', aliResponse.status);
           }
         } catch (err) {
           console.warn('AliExpress recommendations failed:', err);

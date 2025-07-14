@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { useWishlist } from "../../contexts/WishlistContext";
@@ -7,12 +7,11 @@ import { getImageUrl, getFallbackImageUrl } from "../../utils/simpleImageProxy";
 const ProductCard = ({ product, isWishlistContext = false, customButton = null }) => {
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
-  const { isInWishlist: checkIsInWishlist, addToWishlist, wishlistItems } = useWishlist();
+  const { isInWishlist: checkIsInWishlist, addToWishlist, removeFromWishlist, wishlistItems } = useWishlist();
 
 
   // Local state for wishlist operations
   const [isAddingToWishlist, setIsAddingToWishlist] = useState(false);
-  const [isInWishlist, setIsInWishlist] = useState(isWishlistContext || false);
   
   // Image loading state management
   const [imageState, setImageState] = useState('loading'); // loading, loaded, error
@@ -49,36 +48,12 @@ const ProductCard = ({ product, isWishlistContext = false, customButton = null }
     }
   }, [retryCount, MAX_RETRIES]);
 
-  // Check if item is in wishlist when component mounts or wishlist changes
-  useEffect(() => {
-    if (!isAuthenticated || !product?.product_id || !product?.marketplace || isWishlistContext) {
-      return;
-    }
-
-    const inWishlist = checkIsInWishlist(product.product_id, product.marketplace);
-    setIsInWishlist(inWishlist);
-  }, [isAuthenticated, product?.product_id, product?.marketplace, isWishlistContext, checkIsInWishlist, wishlistItems]);
-
-  // Listen for wishlist updates from other components
-  useEffect(() => {
-    const handleWishlistUpdate = (event) => {
-      const { action, product: updatedProduct, productId, marketplace } = event.detail;
-      
-      // Check if this update affects our product
-      const isOurProduct = (updatedProduct?.product_id === product?.product_id && updatedProduct?.marketplace === product?.marketplace) ||
-                           (productId === product?.product_id && marketplace === product?.marketplace);
-      
-      if (isOurProduct) {
-        setIsInWishlist(action === 'added');
-      }
-    };
-
-    window.addEventListener('wishlistUpdated', handleWishlistUpdate);
-    
-    return () => {
-      window.removeEventListener('wishlistUpdated', handleWishlistUpdate);
-    };
-  }, [product?.product_id, product?.marketplace]);
+  // Derive wishlist state directly from context - no local state needed
+  const isInWishlist = useMemo(() => {
+    if (isWishlistContext) return true;
+    if (!isAuthenticated || !product?.product_id || !product?.marketplace) return false;
+    return checkIsInWishlist(product.product_id, product.marketplace);
+  }, [isWishlistContext, isAuthenticated, product?.product_id, product?.marketplace, checkIsInWishlist]);
 
   // Get marketplace logo component
   const getMarketplaceLogo = (marketplace) => {
@@ -175,31 +150,41 @@ const ProductCard = ({ product, isWishlistContext = false, customButton = null }
         return;
       }
 
-      if (!product || isAddingToWishlist || isInWishlist) return;
+      if (!product || isAddingToWishlist) return;
 
       try {
         setIsAddingToWishlist(true);
 
-        // Prepare product data for wishlist
-        const wishlistData = {
-          product_id: product.product_id,
-          marketplace: product.marketplace,
-          title: product.title,
-          original_price: product.original_price,
-          sale_price: product.sale_price,
-          image: product.image,
-          detail_url: `/product/${product.marketplace}/${product.product_id}`,
-          affiliate_link: product.affiliate_link,
-        };
+        if (isInWishlist) {
+          // REMOVE from wishlist
+          // Find the wishlist item to remove
+          const wishlistItem = wishlistItems.find(item => 
+            item.product_id === product.product_id && item.marketplace === product.marketplace
+          );
+          
+          if (wishlistItem) {
+            await removeFromWishlist(wishlistItem.id);
+            console.log(`"${product.title}" removed from wishlist!`);
+          }
+        } else {
+          // ADD to wishlist
+          // Prepare product data for wishlist
+          const wishlistData = {
+            product_id: product.product_id,
+            marketplace: product.marketplace,
+            title: product.title,
+            original_price: product.original_price,
+            sale_price: product.sale_price,
+            image: product.image,
+            detail_url: `/product/${product.marketplace}/${product.product_id}`,
+            affiliate_link: product.affiliate_link,
+          };
 
-        await addToWishlist(wishlistData);
-
-        // Could show a toast notification here
-        console.log(`"${product.title}" added to wishlist!`);
+          await addToWishlist(wishlistData);
+          console.log(`"${product.title}" added to wishlist!`);
+        }
       } catch (error) {
-        console.error("Error adding to wishlist:", error);
-        
-        // No need to revert since we're not doing optimistic updates here
+        console.error("Error updating wishlist:", error);
 
         if (
           error.message.includes("401") ||
@@ -222,7 +207,7 @@ const ProductCard = ({ product, isWishlistContext = false, customButton = null }
         setIsAddingToWishlist(false);
       }
     },
-    [isAuthenticated, product, isAddingToWishlist, navigate, isWishlistContext, isInWishlist, addToWishlist]
+    [isAuthenticated, product, isAddingToWishlist, navigate, isWishlistContext, isInWishlist, addToWishlist, removeFromWishlist, wishlistItems]
   );
 
   // Format price with proper currency
@@ -468,7 +453,7 @@ const ProductCard = ({ product, isWishlistContext = false, customButton = null }
           {/* Enhanced Wishlist Button */}
           <button
             onClick={handleAddToWishlist}
-            disabled={isAddingToWishlist || isInWishlist || isWishlistContext}
+            disabled={isAddingToWishlist || isWishlistContext}
             className={`p-2 rounded-full transition-all duration-200 ${
               isInWishlist || isWishlistContext
                 ? "text-red-500 bg-red-50"
@@ -480,9 +465,9 @@ const ProductCard = ({ product, isWishlistContext = false, customButton = null }
               isWishlistContext
                 ? "Item is in your wishlist"
                 : isInWishlist
-                ? "Already in wishlist"
+                ? "Remove from wishlist"
                 : isAddingToWishlist
-                ? "Adding to wishlist..."
+                ? (isInWishlist ? "Removing from wishlist..." : "Adding to wishlist...")
                 : isAuthenticated
                 ? "Add to wishlist"
                 : "Login to add to wishlist"
