@@ -164,7 +164,6 @@ const ProductCard = ({ product, isWishlistContext = false, customButton = null }
           
           if (wishlistItem) {
             await removeFromWishlist(wishlistItem.id);
-            console.log(`"${product.title}" removed from wishlist!`);
           }
         } else {
           // ADD to wishlist
@@ -181,7 +180,6 @@ const ProductCard = ({ product, isWishlistContext = false, customButton = null }
           };
 
           await addToWishlist(wishlistData);
-          console.log(`"${product.title}" added to wishlist!`);
         }
       } catch (error) {
         console.error("Error updating wishlist:", error);

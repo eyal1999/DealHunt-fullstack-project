@@ -159,14 +159,14 @@ const ProductDescription = ({ description, title }) => {
             {showFullDescription ? "Show Less" : "Show More"}
           </button>
         )}
-      </div>
 
-      {/* Show warning if original had HTML content */}
-      {containsHTML && (
-        <div className="mt-3 text-xs text-gray-500">
-          Description has been cleaned and formatted for better readability.
-        </div>
-      )}
+        {/* Show warning if original had HTML content */}
+        {containsHTML && (
+          <div className="mt-3 text-xs text-gray-500">
+            Description has been cleaned and formatted for better readability.
+          </div>
+        )}
+      </div>
     </div>
   );
 };
@@ -716,6 +716,101 @@ const ProductDetailPage = () => {
     // Convert other types to string
     return String(value);
   }, []);
+
+  // Format delivery time to be more readable
+  const formatDeliveryTime = useCallback((deliveryTime) => {
+    if (!deliveryTime) return null;
+
+    // If it's already in human-readable format (like AliExpress), return as is
+    if (typeof deliveryTime === 'string' && deliveryTime.includes('business days')) {
+      return deliveryTime;
+    }
+
+    // Check if it's an ISO date string (eBay format)
+    if (typeof deliveryTime === 'string' && deliveryTime.includes('T') && deliveryTime.includes('Z')) {
+      try {
+        const deliveryDate = new Date(deliveryTime);
+        const today = new Date();
+        
+        // Reset time parts to get accurate day difference
+        today.setHours(0, 0, 0, 0);
+        deliveryDate.setHours(0, 0, 0, 0);
+        
+        // Calculate difference in days
+        const timeDiff = deliveryDate.getTime() - today.getTime();
+        const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
+        
+        if (daysDiff <= 0) {
+          return "Available now";
+        } else if (daysDiff === 1) {
+          return "1 business day";
+        } else if (daysDiff <= 30) {
+          return `${daysDiff} business days`;
+        } else {
+          return deliveryDate.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+          });
+        }
+      } catch (error) {
+        console.warn('Error parsing delivery date:', error);
+        return deliveryTime;
+      }
+    }
+
+    return deliveryTime;
+  }, []);
+
+  // Collapsible Specifications Component
+  const ProductSpecifications = ({ specifications }) => {
+    const [showAllSpecs, setShowAllSpecs] = useState(false);
+    
+    if (!specifications || Object.keys(specifications).length === 0) {
+      return null;
+    }
+
+    const specEntries = Object.entries(specifications);
+    const displayedSpecs = showAllSpecs ? specEntries : specEntries.slice(0, 4);
+    const hasMoreSpecs = specEntries.length > 4;
+
+    return (
+      <div className="product-specifications bg-white border rounded-lg overflow-hidden">
+        <h3 className="font-semibold p-4 bg-gray-50 border-b">
+          Specifications
+        </h3>
+        <div>
+          {displayedSpecs.map(([key, value], index) => (
+            <div
+              key={key}
+              className={`flex py-2 px-4 ${
+                index % 2 === 0 ? "bg-gray-50" : "bg-white"
+              }`}
+            >
+              <div className="w-1/3 text-sm font-medium text-gray-700">
+                {key}
+              </div>
+              <div className="w-2/3 text-sm text-gray-600">
+                {formatSpecificationValue(value)}
+              </div>
+            </div>
+          ))}
+          
+          {hasMoreSpecs && (
+            <div className="px-4 py-2">
+              <button
+                onClick={() => setShowAllSpecs(!showAllSpecs)}
+                className="text-blue-600 hover:text-blue-800 font-medium text-sm transition-colors"
+              >
+                {showAllSpecs ? "Show Less" : `Show More (${specEntries.length - 4} more)`}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const formatSellerInfo = useCallback((seller, marketplace) => {
     if (!seller) return null;
 
@@ -813,11 +908,11 @@ const ProductDetailPage = () => {
                 </span>
                 <div className="text-right">
                   <div className="font-medium">
-                    {option.cost === "0" ? "Free" : `$${option.cost}`}
+                    {(option.cost === "0" || option.cost === "0.00" || parseFloat(option.cost) === 0) ? "Free" : `$${option.cost}`}
                   </div>
                   {option.estimated_delivery && (
                     <div className="text-xs text-gray-500">
-                      Est: {option.estimated_delivery}
+                      Est: {formatDeliveryTime(option.estimated_delivery)}
                     </div>
                   )}
                 </div>
@@ -866,7 +961,7 @@ const ProductDetailPage = () => {
           {returnPolicy.return_period && (
             <div className="flex justify-between">
               <span className="text-gray-600">Period:</span>
-              <span className="font-medium">{returnPolicy.return_period}</span>
+              <span className="font-medium">{returnPolicy.return_period} days</span>
             </div>
           )}
 
@@ -1209,33 +1304,10 @@ const ProductDetailPage = () => {
             {formatReturnPolicy(product.return_policy)}
           </div>
 
-          {/* Product Specifications */}
+          {/* Product Specifications - Now Collapsible */}
           {product.specifications &&
             Object.keys(product.specifications).length > 0 && (
-              <div className="product-specifications bg-white border rounded-lg overflow-hidden">
-                <h3 className="font-semibold p-4 bg-gray-50 border-b">
-                  Specifications
-                </h3>
-                <div>
-                  {Object.entries(product.specifications).map(
-                    ([key, value], index) => (
-                      <div
-                        key={key}
-                        className={`flex py-2 px-4 ${
-                          index % 2 === 0 ? "bg-gray-50" : "bg-white"
-                        }`}
-                      >
-                        <div className="w-1/3 text-sm font-medium text-gray-700">
-                          {key}
-                        </div>
-                        <div className="w-2/3 text-sm text-gray-600">
-                          {formatSpecificationValue(value)}
-                        </div>
-                      </div>
-                    )
-                  )}
-                </div>
-              </div>
+              <ProductSpecifications specifications={product.specifications} />
             )}
         </div>
       </div>

@@ -342,8 +342,7 @@ const SearchResultsLayout = ({
                     </a>
                     <button
                       onClick={() => {
-                        // Add to wishlist logic
-                        console.log('Add to wishlist:', product);
+                        // Add to wishlist logic handled by ProductCard component
                       }}
                       className="bg-gray-100 text-gray-700 p-2 rounded hover:bg-gray-200 transition-colors"
                       title="Add to Wishlist"

@@ -331,7 +331,6 @@ const RecommendationCarousel = ({
                 <button
                   onClick={() => {
                     // Add to wishlist logic
-                    console.log('Add to wishlist:', recommendation);
                     if (showFeedback) {
                       fetch('/api/recommendations/feedback', {
                         method: 'POST',
