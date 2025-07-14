@@ -9,7 +9,7 @@ from typing import List, Dict, Optional
 import requests
 from app.config import settings
 from app.cache import search_cache
-from app.services.search_service import _base_params, make_signature, _HEADERS
+from app.services.search_service import _base_params, make_signature, _HEADERS, generate_affiliate_links_batch
 from app.services.ebay_hot_products_service import get_ebay_featured_deals
 
 
@@ -90,13 +90,23 @@ def fetch_hot_products(
                 if result.get('resp_code') == 200:
                     products_data = result.get('result', {}).get('products', {}).get('product', [])
                     
+                    # Extract detail URLs for affiliate link generation
+                    detail_urls = [p.get('product_detail_url') for p in products_data if p.get('product_detail_url')]
+                    
+                    # Generate affiliate links in batch
+                    affiliate_links = generate_affiliate_links_batch(detail_urls)
+                    link_map = {link.source_value: link.promotion_link for link in affiliate_links}
+                    print(f"🔗 Generated {len(affiliate_links)} affiliate links for hot products")
+                    
                     # Transform products to our standard format
                     for product in products_data:
+                        detail_url = product.get('product_detail_url', '')
                         transformed = {
                             'product_id': str(product.get('product_id', '')),
                             'title': product.get('product_title', ''),
                             'image': product.get('product_main_image_url', ''),
-                            'detail_url': product.get('product_detail_url', ''),
+                            'detail_url': detail_url,
+                            'affiliate_link': link_map.get(detail_url, detail_url),  # Add affiliate link with fallback
                             'original_price': float(product.get('original_price', 0)),
                             'sale_price': float(product.get('sale_price', 0)),
                             'discount': product.get('discount', 0),

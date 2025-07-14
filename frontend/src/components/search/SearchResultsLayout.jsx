@@ -316,13 +316,17 @@ const SearchResultsLayout = ({
                   )}
 
                   {/* Shipping */}
-                  {product.shipping && (
+                  {product.shipping_cost !== undefined && product.shipping_cost !== null ? (
                     <div className="text-sm text-gray-600 mb-3">
-                      {product.shipping.free ? (
+                      {product.shipping_cost === 0 ? (
                         <span className="text-green-600">Free shipping</span>
                       ) : (
-                        <span>Shipping: {formatPrice(product.shipping.cost)}</span>
+                        <span>Shipping: ${parseFloat(product.shipping_cost).toFixed(2)}</span>
                       )}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-gray-400 mb-3">
+                      Shipping varies
                     </div>
                   )}
 

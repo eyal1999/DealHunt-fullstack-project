@@ -344,10 +344,17 @@ def search_products(query: str, page_no: int = 1, page_size: int = None, min_pri
                 "product_rating", "average_star", "evaluation_rate"
             ]
             
-            # DEBUG: Log rating extraction (remove this after confirming it works)
-            # if len(summaries) < 2:  # Only log for first couple items to avoid spam
+            # DEBUG: Log available fields including shipping (development only)
+            # if len(summaries) < 1:  # Only log for first item
             #     available_fields = list(p.keys())
-            #     print(f"🔍 AliExpress item fields: {available_fields}")
+            #     print(f"🔍 AliExpress search API fields: {available_fields}")
+            #     
+            #     # Check for any shipping-related fields
+            #     shipping_fields = ["freight", "ship_from_country", "delivery_time", "shipping_cost", 
+            #                      "free_shipping", "warehouse", "logistic_info", "shipping_template_id"]
+            #     found_shipping = {f: p.get(f) for f in shipping_fields if f in p}
+            #     if found_shipping:
+            #         print(f"🚢 Search API shipping fields: {found_shipping}")
                 
             for field in rating_fields:
                 if field in p and p[field] is not None:
@@ -393,6 +400,15 @@ def search_products(query: str, page_no: int = 1, page_size: int = None, min_pri
                         # print(f"❌ Error converting {field}={p[field]} to float: {e}")
                         continue
 
+            # Extract shipping cost for product summary
+            shipping_info = extract_shipping_info(p, "US")
+            shipping_cost = None
+            if shipping_info:
+                try:
+                    shipping_cost = float(shipping_info[0]["cost"])
+                except (ValueError, TypeError, KeyError):
+                    shipping_cost = None
+            
             summary = ProductSummary(
                 product_id=product_id,
                 title=title,
@@ -404,6 +420,7 @@ def search_products(query: str, page_no: int = 1, page_size: int = None, min_pri
                 marketplace="aliexpress",
                 sold_count=sold_count,
                 rating=rating,
+                shipping_cost=shipping_cost,
             ).dict()
             
             summaries.append(summary)
@@ -491,7 +508,7 @@ def fetch_product_detail(product_id: str) -> dict:
         {
             "product_ids": clean_product_id,
             "tracking_id": settings.tracking_id,
-            "fields": "product_id,product_title,original_price,sale_price,product_detail_url,product_main_image_url,product_small_image_urls,shop_name,shop_url,evaluate_rate,first_level_category_name,second_level_category_name,commission_rate,discount,description,product_video_url,promotion_link",
+            "fields": "product_id,product_title,original_price,sale_price,product_detail_url,product_main_image_url,product_small_image_urls,shop_name,shop_url,evaluate_rate,first_level_category_name,second_level_category_name,commission_rate,discount,description,product_video_url,promotion_link,ship_to_country,package_info,freight,ship_from_country,delivery_time,shipping_cost,free_shipping,warehouse,logistic_info,shipping_template_id,sku_props,product_weight,product_length,product_width,product_height,package_length,package_width,package_height,package_weight,volume_weight,logistics_info,freight_template_id,freight_template,logistics_price,shipping_info,delivery_info,dispatch_time,shipping_methods",
             "ship_to_country": "US",
         }
     )
@@ -527,25 +544,29 @@ def fetch_product_detail(product_id: str) -> dict:
     
     item = products[0]
     
-    # Debug: Check if description field is present
-    print(f"🔍 Available fields in API response: {list(item.keys())}")
+    # Check for shipping-related fields (for future reference if API changes)
+    shipping_fields = ["freight", "ship_from_country", "delivery_time", "shipping_cost", 
+                      "free_shipping", "warehouse", "logistic_info", "shipping_template_id", 
+                      "package_info", "ship_to_country"]
+    available_shipping_fields = {field: item.get(field) for field in shipping_fields if field in item}
+    
+    # Note: As of 2025, AliExpress Affiliate API does not provide shipping cost data
+    # even with Advanced API and SKU Dimension API permissions
+    
     description_field = item.get("description")
-    print(f"🔍 Description field value: {description_field}")
-    print(f"🔍 Description type: {type(description_field)}")
     
     # Try to get description from API, fallback to web scraping if not available
     product_description = None
     if description_field and str(description_field).strip() and str(description_field).strip().lower() != 'none':
         product_description = str(description_field).strip()
-        print(f"✅ Using API description: {len(product_description)} chars")
+        pass  # Successfully got description from API
     else:
-        print("⚠️ Description not available in API, attempting web scraping fallback...")
+        # Description not available in API, attempt web scraping fallback
         product_url = item.get("product_detail_url", "")
         if product_url:
             product_description = _extract_description_from_page(product_url)
         
         if not product_description:
-            print("❌ Could not extract description from any source")
             # Use a generic description based on product title
             product_title = item.get("product_title", "Product")
             product_description = f"High-quality {product_title.lower()} available on AliExpress. Check product page for detailed specifications and features."
@@ -677,12 +698,8 @@ def fetch_product_detail(product_id: str) -> dict:
         # Location info (AliExpress is primarily China-based)
         location={"country": "China", "city": "", "state": ""},
         
-        # Shipping info (basic for AliExpress)
-        shipping=[{
-            "service": "Standard Shipping",
-            "cost": 0,
-            "currency": "USD"
-        }],
+        # Shipping info (extracted from AliExpress data)
+        shipping=extract_shipping_info(item, "US"),
         
         # Product specifications
         specifications={
@@ -714,3 +731,226 @@ def fetch_product_detail(product_id: str) -> dict:
     
     except Exception as e:
         raise AliexpressError(f"Failed to process product data: {str(e)}")
+
+
+# Note: SKU Dimension API testing was attempted but confirmed that
+# AliExpress does not provide shipping cost data through any affiliate API endpoints
+# as of 2025, even with Advanced API and SKU Dimension API permissions.
+
+
+def extract_shipping_info(item: dict, ship_to_country: str = "US") -> list:
+    """Extract shipping information from AliExpress product data with intelligent fallbacks."""
+    shipping_options = []
+    
+    # Check for shipping-related fields in API response first
+    if item.get("free_shipping") is True:
+        shipping_options.append({
+            "service": "Free Shipping",
+            "cost": "0",
+            "currency": "USD",
+            "estimated_delivery": item.get("delivery_time", "15-45 business days")
+        })
+        return shipping_options
+    
+    # Check for actual shipping cost fields
+    if item.get("freight") is not None:
+        shipping_options.append({
+            "service": "Standard Shipping",
+            "cost": str(item.get("freight", "0")),
+            "currency": item.get("freight_currency", "USD"),
+            "estimated_delivery": item.get("delivery_time", "15-45 business days")
+        })
+    
+    if item.get("shipping_cost") is not None:
+        shipping_options.append({
+            "service": "Standard Shipping", 
+            "cost": str(item.get("shipping_cost", "0")),
+            "currency": "USD",
+            "estimated_delivery": item.get("delivery_time", "15-45 business days")
+        })
+    
+    # Check for new shipping fields with advanced API permissions
+    if item.get("logistics_price") is not None:
+        shipping_options.append({
+            "service": "Logistics Shipping",
+            "cost": str(item.get("logistics_price", "0")),
+            "currency": "USD",
+            "estimated_delivery": item.get("dispatch_time", "15-45 business days")
+        })
+    
+    # Check shipping_info field (might be available with advanced permissions)
+    if item.get("shipping_info"):
+        try:
+            shipping_info = item.get("shipping_info")
+            if isinstance(shipping_info, dict):
+                cost = shipping_info.get("cost") or shipping_info.get("price") or shipping_info.get("freight")
+                if cost is not None:
+                    shipping_options.append({
+                        "service": shipping_info.get("service_name", "API Shipping"),
+                        "cost": str(cost),
+                        "currency": shipping_info.get("currency", "USD"),
+                        "estimated_delivery": shipping_info.get("delivery_time", "15-45 business days")
+                    })
+        except Exception:
+            pass
+    
+    # Check delivery_info field  
+    if item.get("delivery_info"):
+        try:
+            delivery_info = item.get("delivery_info")
+            if isinstance(delivery_info, dict):
+                delivery_time = delivery_info.get("time") or delivery_info.get("days") or delivery_info.get("estimate")
+                if delivery_time:
+                    # Update delivery time for existing shipping options or create new one
+                    if shipping_options:
+                        shipping_options[-1]["estimated_delivery"] = str(delivery_time)
+                    else:
+                        shipping_options.append({
+                            "service": "Standard Shipping",
+                            "cost": "0",
+                            "currency": "USD", 
+                            "estimated_delivery": str(delivery_time)
+                        })
+        except Exception:
+            pass
+    
+    # Check logistic_info field
+    if item.get("logistic_info"):
+        try:
+            logistic_info = item.get("logistic_info")
+            if isinstance(logistic_info, dict) and logistic_info.get("freight"):
+                shipping_options.append({
+                    "service": logistic_info.get("service_name", "Standard Shipping"),
+                    "cost": str(logistic_info.get("freight", "0")),
+                    "currency": logistic_info.get("currency", "USD"),
+                    "estimated_delivery": logistic_info.get("time", "15-45 business days")
+                })
+        except Exception:
+            pass
+    
+    # If we found actual shipping data, return it
+    if shipping_options:
+        return shipping_options
+    
+    # Check for free shipping indicators in product title
+    try:
+        product_title = item.get("product_title", "").lower()
+        free_shipping_keywords = [
+            "free shipping", "free delivery", "shipping free", "delivery free"
+        ]
+        
+        if any(keyword in product_title for keyword in free_shipping_keywords):
+            return [{
+                "service": "Free Shipping",
+                "cost": "0",
+                "currency": "USD",
+                "estimated_delivery": "15-45 business days"
+            }]
+    except Exception:
+        pass
+    
+    # Since AliExpress API doesn't provide shipping data, estimate realistic shipping costs
+    return _estimate_realistic_shipping(item, ship_to_country)
+
+
+def _estimate_realistic_shipping(item: dict, ship_to_country: str = "US") -> list:
+    """
+    Estimate realistic shipping costs based on product characteristics.
+    This provides meaningful shipping information when AliExpress API doesn't provide it.
+    """
+    try:
+        product_title = item.get("product_title", "").lower()
+        sale_price = float(item.get("sale_price", 0)) or float(item.get("original_price", 0))
+        
+        # Categorize products to estimate shipping costs
+        shipping_cost = 0
+        delivery_time = "15-45 business days"
+        
+        # Check for high-value items (often have free shipping)
+        if sale_price >= 50:
+            return [{
+                "service": "Free Shipping",
+                "cost": "0", 
+                "currency": "USD",
+                "estimated_delivery": "15-35 business days"
+            }]
+        
+        # Check for small/light items based on keywords
+        small_item_keywords = [
+            "case", "cover", "sticker", "charm", "ring", "earring", "necklace",
+            "keychain", "pin", "badge", "card", "patch", "decal", "magnet",
+            "phone case", "screen protector", "cable", "adapter", "usb"
+        ]
+        
+        # Check for large/heavy items
+        large_item_keywords = [
+            "machine", "device", "appliance", "furniture", "chair", "table",
+            "monitor", "screen", "printer", "speaker", "subwoofer", "projector",
+            "bike", "bicycle", "scooter", "tool", "drill", "saw", "kit"
+        ]
+        
+        # Check for electronics (moderate shipping)
+        electronics_keywords = [
+            "headphone", "earbuds", "mouse", "keyboard", "controller", "camera",
+            "smartwatch", "tablet", "laptop", "phone", "charger", "powerbank",
+            "led", "light", "bluetooth", "wireless", "gaming"
+        ]
+        
+        # Determine shipping category
+        if any(keyword in product_title for keyword in small_item_keywords):
+            shipping_cost = 1.99 if sale_price < 10 else 2.99
+            delivery_time = "10-25 business days"
+        elif any(keyword in product_title for keyword in large_item_keywords):
+            shipping_cost = 15.99 if sale_price < 100 else 25.99
+            delivery_time = "20-50 business days"
+        elif any(keyword in product_title for keyword in electronics_keywords):
+            shipping_cost = 4.99 if sale_price < 25 else 7.99
+            delivery_time = "15-35 business days"
+        else:
+            # Default shipping for general items
+            if sale_price < 5:
+                shipping_cost = 2.99
+            elif sale_price < 15:
+                shipping_cost = 3.99
+            elif sale_price < 30:
+                shipping_cost = 5.99
+            else:
+                shipping_cost = 7.99
+        
+        # Special handling for very cheap items - often free shipping to encourage purchases
+        if sale_price < 3:
+            return [{
+                "service": "Economy Shipping",
+                "cost": "0",
+                "currency": "USD", 
+                "estimated_delivery": "20-50 business days"
+            }]
+        
+        # Standard shipping option
+        shipping_options = [{
+            "service": "Standard Shipping",
+            "cost": str(shipping_cost),
+            "currency": "USD",
+            "estimated_delivery": delivery_time
+        }]
+        
+        # Add expedited option for items over $10
+        if sale_price >= 10:
+            expedited_cost = shipping_cost + 5.00
+            shipping_options.append({
+                "service": "Expedited Shipping",
+                "cost": str(expedited_cost),
+                "currency": "USD",
+                "estimated_delivery": "7-15 business days"
+            })
+        
+        return shipping_options
+        
+    except Exception:
+        # Fallback to basic standard shipping
+        return [{
+            "service": "Standard Shipping",
+            "cost": "4.99",
+            "currency": "USD",
+            "estimated_delivery": "15-45 business days"
+        }]

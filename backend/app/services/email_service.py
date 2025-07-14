@@ -131,7 +131,9 @@ This is an automated email. Please do not reply to this message.
             recipients=[email],
             body=html_content,
             subtype="html",
-            alternative_body=text_content
+            alternative_body=text_content,
+            reply_to=conf.MAIL_FROM,
+            headers={"X-Priority": "1", "X-MSMail-Priority": "High", "Importance": "High"}
         )
         
         try:
@@ -190,7 +192,9 @@ This is an automated email. Please do not reply to this message.
             subject=f"💰 Price Drop Alert: Save ${total_savings:.2f}",
             recipients=[email],
             body=html_content,
-            subtype="html"
+            subtype="html",
+            reply_to=conf.MAIL_FROM,
+            headers={"X-Priority": "1", "X-MSMail-Priority": "High", "Importance": "High"}
         )
         
         try:

@@ -428,6 +428,23 @@ const ProductCard = ({ product, isWishlistContext = false, customButton = null }
                 <span className="text-gray-400">-</span>
               )}
             </div>
+
+            {/* Shipping Information - Fixed height */}
+            <div className="h-5 text-xs mt-1">
+              {product.shipping_cost !== undefined && product.shipping_cost !== null ? (
+                product.shipping_cost === 0 ? (
+                  <span className="text-green-600 font-medium">
+                    Free shipping
+                  </span>
+                ) : (
+                  <span className="text-gray-600">
+                    Shipping: ${parseFloat(product.shipping_cost).toFixed(2)}
+                  </span>
+                )
+              ) : (
+                <span className="text-gray-400">Shipping varies</span>
+              )}
+            </div>
           </div>
         </div>
       </Link>

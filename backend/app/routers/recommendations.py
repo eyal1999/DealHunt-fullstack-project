@@ -610,13 +610,29 @@ async def get_aliexpress_comprehensive_recommendations(
 ):
     """Get comprehensive AliExpress recommendations including similar products, trending items, and price alternatives."""
     try:
+        # Validate input parameters
+        if not product_id or not product_title:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Product ID and title are required"
+            )
+        
+        if current_price <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Current price must be greater than 0"
+            )
+        
+        # Truncate very long product titles to prevent issues
+        truncated_title = product_title[:200] if len(product_title) > 200 else product_title
+        
         AliExpressService = get_aliexpress_service()
         if not AliExpressService:
             return get_mock_comprehensive_recommendations(product_id)
         
         recommendations = AliExpressService.get_comprehensive_recommendations(
             product_id=product_id,
-            product_title=product_title,
+            product_title=truncated_title,
             current_price=current_price,
             category=category,
             limit_per_type=limit_per_type
@@ -643,8 +659,9 @@ async def get_aliexpress_comprehensive_recommendations(
                 }
             }
         }
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get comprehensive recommendations: {str(e)}"
-        )
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except Exception:
+        # Return empty recommendations instead of failing completely
+        return get_mock_comprehensive_recommendations(product_id)

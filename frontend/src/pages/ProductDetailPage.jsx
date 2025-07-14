@@ -454,6 +454,11 @@ const ProductDetailPage = () => {
     }
   }, [wishlistMessage]);
 
+  // Reset animations when product ID changes
+  useEffect(() => {
+    animationsInitialized.current = false;
+  }, [marketplace, id]);
+
   // Initialize product page animations after product is loaded
   useEffect(() => {
     if (product && !isLoading && !error && !animationsInitialized.current) {
@@ -820,13 +825,31 @@ const ProductDetailPage = () => {
                   </div>
                   {option.estimated_delivery && (
                     <div className="text-xs text-gray-500">
-                      Est:{" "}
-                      {new Date(option.estimated_delivery).toLocaleDateString()}
+                      Est: {option.estimated_delivery}
                     </div>
                   )}
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Shipping Disclaimer */}
+        {marketplace === "aliexpress" && (
+          <div className="mt-3 pt-3 border-t border-green-200">
+            <div className="text-xs text-gray-500 leading-relaxed">
+              <span className="text-gray-400">*</span> Shipping costs are estimates. Final costs may vary based on AliExpress promotions, cart total, and Choice program eligibility.{" "}
+              {product?.affiliate_link && (
+                <a 
+                  href={product.affiliate_link} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-green-600 hover:text-green-700 underline"
+                >
+                  Check exact shipping on AliExpress
+                </a>
+              )}
+            </div>
           </div>
         )}
       </div>

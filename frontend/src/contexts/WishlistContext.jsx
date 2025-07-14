@@ -82,7 +82,7 @@ export const WishlistProvider = ({ children }) => {
         setIsLoading(false);
       }
     }
-  }, [isAuthenticated, isLoading, lastFetchTime]);
+  }, [isAuthenticated]);
 
   // Add item to wishlist
   const addToWishlist = useCallback(async (productData) => {

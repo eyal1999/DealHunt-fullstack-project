@@ -18,11 +18,10 @@ try:
     from app.core.utils import timestamp_shanghai, make_signature
     from app.errors import AliexpressError
     from app.models.models import ProductSummary
-except ImportError as e:
+except ImportError:
     # Handle missing dependencies gracefully
     HAS_DEPENDENCIES = False
     settings = None
-    print(f"Warning: Core dependencies not available for recommendations service: {e}")
     
     # Create stub classes/functions
     class AliexpressError(Exception):
@@ -105,16 +104,13 @@ class AliExpressRecommendationService:
         try:
             # Check if dependencies are available
             if not HAS_DEPENDENCIES:
-                print("⚠️ Dependencies not available for recommendations")
                 return []
             
-            print(f"🔍 Finding similar products for: {product_title[:50]}...")
             
             # Extract keywords from product title
             keywords = AliExpressRecommendationService.extract_keywords_from_title(product_title)
             
             if not keywords:
-                print("⚠️ No keywords extracted from title, using category search")
                 if category:
                     keywords = [category]
                 else:
@@ -122,7 +118,6 @@ class AliExpressRecommendationService:
             
             # Create search query from keywords
             search_query = " ".join(keywords[:3])  # Use top 3 keywords
-            print(f"🔍 Search query for similar products: '{search_query}'")
             
             # Dynamic import to avoid circular dependencies
             try:
@@ -133,8 +128,7 @@ class AliExpressRecommendationService:
                     page_no=1,
                     page_size=min(limit * 2, 50)  # Get more to filter out the original product
                 )
-            except ImportError as e:
-                print(f"Failed to import search_products: {e}")
+            except ImportError:
                 return []
             
             # Filter out the original product and limit results
@@ -153,11 +147,9 @@ class AliExpressRecommendationService:
             )
             
             result = filtered_products[:limit]
-            print(f"✅ Found {len(result)} similar products")
             return result
             
-        except Exception as e:
-            print(f"❌ Error getting similar products: {e}")
+        except Exception:
             return []
     
     @staticmethod
@@ -175,10 +167,8 @@ class AliExpressRecommendationService:
         try:
             # Check if dependencies are available
             if not HAS_DEPENDENCIES:
-                print("⚠️ Dependencies not available for trending recommendations")
                 return []
             
-            print(f"🔥 Getting trending products in category: {category_name}")
             
             # Dynamic import to avoid circular dependencies
             try:
@@ -188,8 +178,7 @@ class AliExpressRecommendationService:
                     category=category_name,
                     limit=limit * 2  # Get more to ensure we have enough after filtering
                 )
-            except ImportError as e:
-                print(f"Failed to import get_aliexpress_hot_products: {e}")
+            except ImportError:
                 return []
             
             # Sort by deal score and limit results
@@ -199,11 +188,9 @@ class AliExpressRecommendationService:
                 reverse=True
             )[:limit]
             
-            print(f"✅ Found {len(trending_products)} trending products in {category_name}")
             return trending_products
             
-        except Exception as e:
-            print(f"❌ Error getting trending products in category: {e}")
+        except Exception:
             return []
     
     @staticmethod
@@ -223,10 +210,8 @@ class AliExpressRecommendationService:
         try:
             # Check if dependencies are available
             if not HAS_DEPENDENCIES:
-                print("⚠️ Dependencies not available for price alternatives")
                 return []
             
-            print(f"💰 Finding price alternatives for ${current_price}")
             
             # Calculate price ranges
             lower_bound = current_price * (1 - price_range_percent)
@@ -250,8 +235,7 @@ class AliExpressRecommendationService:
                     min_price=lower_bound,
                     max_price=upper_bound
                 )
-            except ImportError as e:
-                print(f"Failed to import search_products for price alternatives: {e}")
+            except ImportError:
                 return []
             
             # Sort by best value (price vs rating vs sold count)
@@ -269,11 +253,9 @@ class AliExpressRecommendationService:
             alternatives.sort(key=value_score, reverse=True)
             
             result = alternatives[:limit]
-            print(f"✅ Found {len(result)} price alternatives")
             return result
             
-        except Exception as e:
-            print(f"❌ Error getting price alternatives: {e}")
+        except Exception:
             return []
     
     @staticmethod
@@ -298,7 +280,6 @@ class AliExpressRecommendationService:
         }
         
         try:
-            print(f"🎯 Getting comprehensive recommendations for product {product_id}")
             
             # Get similar products
             recommendations['similar_products'] = AliExpressRecommendationService.get_similar_products(
@@ -333,13 +314,9 @@ class AliExpressRecommendationService:
                         unique_products.append(product)
                 recommendations[rec_type] = unique_products
             
-            total_recommendations = sum(len(products) for products in recommendations.values())
-            print(f"✅ Generated {total_recommendations} total recommendations across all types")
-            
             return recommendations
             
-        except Exception as e:
-            print(f"❌ Error getting comprehensive recommendations: {e}")
+        except Exception:
             return recommendations
 
 # Convenience functions for easy integration
