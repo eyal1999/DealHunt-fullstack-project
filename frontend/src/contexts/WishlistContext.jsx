@@ -86,22 +86,23 @@ export const WishlistProvider = ({ children }) => {
 
   // Add item to wishlist
   const addToWishlist = useCallback(async (productData) => {
+    // Optimistic update: immediately add to local state
+    const optimisticItem = {
+      id: `temp-${Date.now()}`, // Temporary ID
+      product_id: productData.product_id,
+      marketplace: productData.marketplace,
+      title: productData.title,
+      original_price: productData.original_price,
+      sale_price: productData.sale_price,
+      image: productData.image,
+      detail_url: productData.detail_url,
+      affiliate_link: productData.affiliate_link,
+      added_at: new Date().toISOString(),
+      last_checked_price: null,
+      price_history: []
+    };
+    
     try {
-      // Optimistic update: immediately add to local state
-      const optimisticItem = {
-        id: `temp-${Date.now()}`, // Temporary ID
-        product_id: productData.product_id,
-        marketplace: productData.marketplace,
-        title: productData.title,
-        original_price: productData.original_price,
-        sale_price: productData.sale_price,
-        image: productData.image,
-        detail_url: productData.detail_url,
-        affiliate_link: productData.affiliate_link,
-        added_at: new Date().toISOString(),
-        last_checked_price: null,
-        price_history: []
-      };
       
       // Add optimistically to current items
       const updatedItems = [...wishlistItems, optimisticItem];

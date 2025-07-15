@@ -7,7 +7,7 @@ const wishlistService = {
    */
   getWishlist: async () => {
     try {
-      const response = await api.get("/wishlist");
+      const response = await api.get("/wishlist/");
 
       // The API returns an array of wishlist items directly
       return response || [];
@@ -50,7 +50,7 @@ const wishlistService = {
         }
       }
 
-      const response = await api.post("/wishlist", productData);
+      const response = await api.post("/wishlist/", productData);
 
       return response;
     } catch (error) {
