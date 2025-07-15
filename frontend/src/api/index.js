@@ -1,9 +1,9 @@
 // Base API configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8001";
-
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+console.log(API_BASE_URL);
 const api = {
   baseURL: API_BASE_URL,
-  
+
   /**
    * Custom fetch wrapper with authentication and error handling
    * @param {string} endpoint - API endpoint
@@ -18,7 +18,8 @@ const api = {
     };
 
     // Add auth token if available (check both localStorage and sessionStorage)
-    const token = localStorage.getItem("token") || sessionStorage.getItem("token");
+    const token =
+      localStorage.getItem("token") || sessionStorage.getItem("token");
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
     }
@@ -39,9 +40,9 @@ const api = {
         localStorage.removeItem("user");
         sessionStorage.removeItem("token");
         sessionStorage.removeItem("user");
-        
+
         // Only redirect to login if we're not already there
-        if (!window.location.pathname.includes('/login')) {
+        if (!window.location.pathname.includes("/login")) {
           window.location.href = "/login";
         }
         throw new Error("Unauthorized");
@@ -79,7 +80,9 @@ const api = {
     });
 
     // Make GET request - use full URL string
-    return api.fetch(url.toString().replace(API_BASE_URL, ''), { method: "GET" });
+    return api.fetch(url.toString().replace(API_BASE_URL, ""), {
+      method: "GET",
+    });
   },
 
   post: (endpoint, data = {}) => {

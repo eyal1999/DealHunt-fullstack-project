@@ -2,7 +2,7 @@
  * Simple image proxy utility - no complex React hooks or async logic
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 /**
  * Check if URL is from AliExpress CDN
