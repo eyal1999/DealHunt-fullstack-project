@@ -19,7 +19,7 @@ services:
 
   backend:
     environment:
-      - MONGODB_URI=mongodb://admin:password123@mongodb:27017/dealhunt?authSource=admin
+          - MONGODB_URI=mongodb://admin:password123@mongodb:27017/dealhunt?authSource=admin
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -44,8 +44,6 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      args:
-        - VITE_API_URL=/api
     container_name: react_frontend
     restart: unless-stopped
     ports:

@@ -16,13 +16,15 @@ import ProductRecommendations from "../components/recommendations/ProductRecomme
 import ProductDetailSkeleton from "../components/loading/ProductDetailSkeleton";
 
 // Simple Image Component for Product Details
-const ProductImage = ({
+const ProductImage = React.forwardRef(({
   src,
   alt,
   className = "",
   fallbackSrc = null,
   showLoader = true,
-}) => {
+  style,
+  ...props
+}, ref) => {
   const [hasError, setHasError] = useState(false);
   
   // Use the simple proxy for the source
@@ -38,14 +40,17 @@ const ProductImage = ({
 
   return (
     <img
+      ref={ref}
       src={imageSrc}
       alt={alt}
       className={className}
+      style={style}
       loading="lazy"
       onError={handleError}
+      {...props}
     />
   );
-};
+});
 
 // NEW: Enhanced Description Component with better text handling
 const ProductDescription = ({ description, title }) => {
@@ -172,6 +177,19 @@ const ProductDescription = ({ description, title }) => {
   );
 };
 
+// Simple Product Image Display Component
+const SimpleProductImage = ({ src, alt }) => {
+  return (
+    <div className="w-full h-full">
+      <ProductImage
+        src={src}
+        alt={alt}
+        className="w-full h-full object-contain"
+      />
+    </div>
+  );
+};
+
 // Enhanced Product Image Section Component
 const ProductImageSection = ({
   product,
@@ -217,6 +235,7 @@ const ProductImageSection = ({
     },
     [processedImages.length, setActiveImage]
   );
+
 
   return (
     <div className="product-images-section lg:col-span-1">
@@ -266,10 +285,9 @@ const ProductImageSection = ({
         ) : (
           <div className="w-full h-96 bg-gray-100 rounded-lg overflow-hidden">
             {processedImages.length > 0 ? (
-              <ProductImage
+              <SimpleProductImage
                 src={processedImages[Math.min(activeImage, processedImages.length - 1)] || processedImages[0]}
                 alt={product?.title || 'Product image'}
-                className="w-full h-full object-contain cursor-zoom-in"
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-gray-500">
@@ -306,6 +324,7 @@ const ProductImageSection = ({
           ))}
         </div>
       )}
+
     </div>
   );
 };
@@ -314,7 +333,7 @@ const ProductDetailPage = () => {
   const { marketplace, id } = useParams();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
-  const { isInWishlist: checkIsInWishlist, addToWishlist, removeFromWishlist, getWishlistItem, wishlistItems } = useWishlist();
+  const { isInWishlist: checkIsInWishlist, addToWishlist, removeFromWishlist, getWishlistItem, wishlistItems, isLoading: wishlistLoading, fetchWishlist } = useWishlist();
 
   // Enable auto-wishlist functionality
   useAutoWishlist();
@@ -399,6 +418,8 @@ const ProductDetailPage = () => {
   const [error, setError] = useState(null);
   const [activeImage, setActiveImage] = useState(0);
   const [showVideo, setShowVideo] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const [isAutoRetrying, setIsAutoRetrying] = useState(false);
 
   // Wishlist state
   const [isAddingToWishlist, setIsAddingToWishlist] = useState(false);
@@ -420,25 +441,57 @@ const ProductDetailPage = () => {
       // Use the existing productService instead of raw fetch
       const data = await productService.getProductDetails(marketplace, id);
       setProduct(data);
+      setError(null);
+      setRetryCount(0);
       
       // Add a small delay to ensure smooth transition
       setTimeout(() => {
         setIsContentReady(true);
       }, 100);
+      
+      setIsLoading(false);
     } catch (err) {
       console.error("Error fetching product detail:", err);
       let errorMessage = "Failed to load product details";
+      let shouldAutoRetry = false;
 
       if (!navigator.onLine) {
         errorMessage = "No internet connection. Please check your connection";
       } else if (err.message) {
-        errorMessage = err.message;
+        // Handle specific error types
+        if (err.message.includes("503") || err.message.includes("Service Unavailable")) {
+          errorMessage = "The service is temporarily busy. Please try again in a moment.";
+          shouldAutoRetry = retryCount < 2; // Auto-retry up to 2 times for 503 errors
+        } else if (err.message.includes("AliExpress service error")) {
+          errorMessage = "AliExpress data temporarily unavailable. Please try refreshing the page.";
+          shouldAutoRetry = retryCount < 1; // Auto-retry once for AliExpress errors
+        } else if (err.message.includes("404") || err.message.includes("not found")) {
+          errorMessage = "Product not found. It may have been removed or the link is invalid.";
+        } else if (err.message.includes("timeout")) {
+          errorMessage = "Request timed out. Please check your internet connection and try again.";
+          shouldAutoRetry = retryCount < 1; // Auto-retry once for timeout errors
+        } else {
+          errorMessage = err.message;
+        }
       }
 
-      setError(errorMessage);
-      setProduct(null);
-    } finally {
-      setIsLoading(false);
+      // Implement auto-retry with exponential backoff
+      if (shouldAutoRetry) {
+        const retryDelay = Math.min(1000 * Math.pow(2, retryCount), 5000); // 1s, 2s, 4s, max 5s
+        setIsAutoRetrying(true);
+        setRetryCount(prev => prev + 1);
+        
+        console.log(`Auto-retrying in ${retryDelay}ms (attempt ${retryCount + 1})`);
+        
+        setTimeout(() => {
+          setIsAutoRetrying(false);
+          fetchProductDetail();
+        }, retryDelay);
+      } else {
+        setError(errorMessage);
+        setProduct(null);
+        setIsLoading(false);
+      }
     }
   }, [marketplace, id]);
 
@@ -448,6 +501,8 @@ const ProductDetailPage = () => {
       setIsContentReady(false);
       setProduct(null);
       setError(null);
+      setRetryCount(0);
+      setIsAutoRetrying(false);
       fetchProductDetail();
     }
   }, [fetchProductDetail]);
@@ -463,60 +518,61 @@ const ProductDetailPage = () => {
     }
   }, [wishlistMessage]);
 
-  // Clean up and re-initialize animations when product changes
+  // Initialize scroll reveal animations with safety checks
   useEffect(() => {
     if (product && !isLoading && !error) {
       // Clean up previous animations
       cleanupAnimations();
       
-      // Small delay to ensure DOM is fully rendered and cleanup is complete
+      // Ensure all content is visible first
+      const elements = document.querySelectorAll('.product-breadcrumbs, .product-detail-content, .product-images-section, .product-info, .product-sidebar, .recommendations-section');
+      elements.forEach(el => {
+        el.style.opacity = '1';
+        el.style.visibility = 'visible';
+        el.style.transform = 'none';
+      });
+      
+      // Initialize animations after a delay
       const timer = setTimeout(() => {
+        // Re-initialize with safer configuration
         initProductPageAnimations();
         
-        // Auto-fix ScrollReveal issues for all products
+        // Ensure visibility after animations
         setTimeout(() => {
-          const elements = ['.product-breadcrumbs', '.product-detail-content', '.product-images-section', '.product-info', '.product-sidebar'];
-          let needsFix = false;
-          
-          elements.forEach(selector => {
-            const el = document.querySelector(selector);
-            if (el) {
-              const computedStyle = window.getComputedStyle(el);
-              const hasRevealClass = el.classList.contains('sr-reveal');
-              const opacity = parseFloat(computedStyle.opacity);
-              
-              // If ScrollReveal failed (no sr-reveal class or opacity is not 1), mark for fix
-              if (!hasRevealClass || opacity < 1) {
-                needsFix = true;
-              }
+          elements.forEach(el => {
+            if (window.getComputedStyle(el).opacity === '0') {
+              el.style.opacity = '1';
+              el.style.visibility = 'visible';
             }
           });
-          
-          // Fix elements if ScrollReveal failed
-          if (needsFix) {
-            elements.forEach(selector => {
-              const el = document.querySelector(selector);
-              if (el) {
-                el.style.visibility = 'visible';
-                el.style.opacity = '1';
-                el.style.transform = 'none';
-              }
-            });
-          }
-        }, 1000); // Increased delay to ensure animations complete
-      }, 100);
+        }, 1000);
+      }, 200);
       
       return () => clearTimeout(timer);
     }
-  }, [product, isLoading, error, marketplace, id]); // Added marketplace and id as dependencies
+  }, [product, isLoading, error]);
 
-  // Check if product is already in wishlist (when user is authenticated)
+  // Force refresh wishlist when user becomes authenticated (for login redirects)
   useEffect(() => {
-    if (!isAuthenticated || !product) return;
+    if (isAuthenticated && product) {
+      // Force refresh wishlist data when user becomes authenticated
+      fetchWishlist(true, false);
+    }
+  }, [isAuthenticated, fetchWishlist, product]);
+
+  // Check if product is already in wishlist (when user is authenticated and wishlist is loaded)
+  useEffect(() => {
+    if (!isAuthenticated || !product) {
+      setIsInWishlist(false);
+      return;
+    }
+
+    // Wait for wishlist to finish loading before checking
+    if (wishlistLoading) return;
 
     const inWishlist = checkIsInWishlist(product.product_id, product.marketplace);
     setIsInWishlist(inWishlist);
-  }, [isAuthenticated, product, checkIsInWishlist, wishlistItems]);
+  }, [isAuthenticated, product, checkIsInWishlist, wishlistItems, wishlistLoading]);
 
   // Handle removing product from wishlist
   const handleRemoveFromWishlist = useCallback(async () => {
@@ -660,6 +716,9 @@ const ProductDetailPage = () => {
 
   // FIXED: Retry function that actually works
   const handleRetry = useCallback(() => {
+    setRetryCount(0);
+    setError(null);
+    setIsLoading(true);
     fetchProductDetail();
   }, [fetchProductDetail]);
 
@@ -1029,9 +1088,19 @@ const ProductDetailPage = () => {
   }, []);
 
   // Loading state - Show skeleton while loading
-  if (isLoading || !isContentReady) {
+  if (isLoading || !isContentReady || isAutoRetrying) {
     return (
       <div className="max-w-6xl mx-auto px-4 py-8">
+        {isAutoRetrying && (
+          <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-center text-blue-800">
+              <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-blue-600 mr-3"></div>
+              <span className="text-sm font-medium">
+                Retrying connection... (Attempt {retryCount + 1})
+              </span>
+            </div>
+          </div>
+        )}
         <ProductDetailSkeleton />
       </div>
     );
@@ -1039,23 +1108,62 @@ const ProductDetailPage = () => {
 
   // Error state
   if (error) {
+    const isServiceError = error.includes("503") || error.includes("Service Unavailable") || error.includes("AliExpress");
+    const isNotFound = error.includes("404") || error.includes("not found");
+    
     return (
-      <div className="text-center py-12">
-        <p className="text-xl font-medium mb-4">Oops! Something went wrong</p>
-        <p className="text-gray-600 mb-6">{error}</p>
-        <div className="space-x-4">
-          <button
-            onClick={handleRetry}
-            className="bg-primary text-white px-4 py-2 rounded hover:bg-blue-700"
-          >
-            Try Again
-          </button>
-          <Link
-            to="/"
-            className="bg-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-400"
-          >
-            Back to Home
-          </Link>
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <div className="text-center py-12">
+          <div className="mb-6">
+            {isServiceError ? (
+              <div className="text-6xl mb-4">⚠️</div>
+            ) : isNotFound ? (
+              <div className="text-6xl mb-4">🔍</div>
+            ) : (
+              <div className="text-6xl mb-4">❌</div>
+            )}
+          </div>
+          
+          <h1 className="text-2xl font-bold mb-4 text-gray-900">
+            {isServiceError ? "Service Temporarily Unavailable" : 
+             isNotFound ? "Product Not Found" : 
+             "Something Went Wrong"}
+          </h1>
+          
+          <p className="text-gray-600 mb-6 max-w-md mx-auto">{error}</p>
+          
+          {isServiceError && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6 max-w-md mx-auto">
+              <p className="text-sm text-yellow-800">
+                <strong>Why does this happen?</strong><br/>
+                AliExpress may be experiencing high traffic or temporary maintenance. 
+                This usually resolves within a few minutes.
+              </p>
+            </div>
+          )}
+          
+          <div className="space-x-4">
+            <button
+              onClick={handleRetry}
+              className="bg-primary text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            >
+              🔄 Try Again
+            </button>
+            <Link
+              to="/"
+              className="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 transition-colors font-medium inline-block"
+            >
+              🏠 Back to Home
+            </Link>
+            {!isNotFound && (
+              <Link
+                to="/search"
+                className="bg-green-500 text-white px-6 py-3 rounded-lg hover:bg-green-600 transition-colors font-medium inline-block"
+              >
+                🔍 Browse Products
+              </Link>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -1082,7 +1190,7 @@ const ProductDetailPage = () => {
   // Main render
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
-      <div className={`fade-in ${isContentReady ? 'opacity-100' : 'opacity-0'}`}>
+      <div style={{ opacity: 1, visibility: 'visible', transform: 'none' }}>
       {/* Enhanced Breadcrumbs */}
       <div className="product-breadcrumbs text-sm text-gray-500 mb-6">
         {formatBreadcrumbs(product).map((crumb, index) => (
@@ -1116,7 +1224,7 @@ const ProductDetailPage = () => {
       {/* Product Content */}
       <div className="product-detail-content grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* ENHANCED Product Images & Video - Left Column */}
-        <div className="fade-in stagger-1">
+        <div>
           <ProductImageSection
             product={product}
             activeImage={activeImage}
@@ -1127,7 +1235,7 @@ const ProductDetailPage = () => {
         </div>
 
         {/* Product Info - Middle Column */}
-        <div className="product-info lg:col-span-1 fade-in stagger-2">
+        <div className="product-info lg:col-span-1">
           {/* Title and Basic Info */}
           <div className="product-title-section mb-4">
             <h1 className="text-2xl font-bold text-gray-800 mb-3">
@@ -1293,7 +1401,7 @@ const ProductDetailPage = () => {
         </div>
 
         {/* Additional Info - Right Column */}
-        <div className="product-sidebar lg:col-span-1 space-y-4 fade-in stagger-3">
+        <div className="product-sidebar lg:col-span-1 space-y-4">
           {/* Seller/Shop Information */}
           <div className="seller-info-section">
             {formatSellerInfo(product.seller, product.marketplace)}
@@ -1318,7 +1426,7 @@ const ProductDetailPage = () => {
       </div>
 
       {/* Product Recommendations Section */}
-      <div className="fade-in stagger-4">
+      <div>
         <ProductRecommendations 
           product={product} 
           marketplace={product.marketplace} 

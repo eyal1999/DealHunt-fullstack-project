@@ -289,3 +289,66 @@ async def update_notification_preferences(
             "price_drop_notifications": preferences.price_drop_notifications
         }
     }
+
+@router.put("/profile")
+async def update_profile(
+    profile_data: dict,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Update user's basic profile information (full name).
+    """
+    # Validate input
+    if not profile_data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Profile data is required"
+        )
+    
+    # Only allow updating full_name for security reasons
+    allowed_fields = ["full_name"]
+    update_data = {}
+    
+    for field in allowed_fields:
+        if field in profile_data:
+            if field == "full_name":
+                if not profile_data[field] or not profile_data[field].strip():
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Full name cannot be empty"
+                    )
+                update_data[field] = profile_data[field].strip()
+    
+    if not update_data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No valid fields to update"
+        )
+    
+    # Update user profile in database
+    result = await users_collection.update_one(
+        {"_id": ObjectId(current_user.id)},
+        {"$set": update_data}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    # Return updated user data
+    updated_user = await users_collection.find_one({"_id": ObjectId(current_user.id)})
+    
+    return {
+        "id": str(updated_user["_id"]),
+        "email": updated_user["email"],
+        "full_name": updated_user["full_name"],
+        "picture_url": updated_user.get("picture_url"),
+        "auth_provider": updated_user.get("auth_provider", "email"),
+        "is_active": updated_user.get("is_active", True),
+        "created_at": updated_user.get("created_at"),
+        "last_login": updated_user.get("last_login"),
+        "email_notifications": updated_user.get("email_notifications", True),
+        "price_drop_notifications": updated_user.get("price_drop_notifications", True)
+    }
