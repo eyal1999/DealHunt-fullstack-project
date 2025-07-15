@@ -292,6 +292,62 @@ def search_products_ebay_single_page(query: str, page: int = 1, min_price: float
                             except (ValueError, TypeError):
                                 continue
             
+            # Extract category information from eBay API response
+            categories = {
+                "first_level": "",
+                "second_level": "",
+                "first_level_id": "",
+                "second_level_id": "",
+                "primary_category_id": "",
+                "category_path": "",
+                "all_categories": []
+            }
+            
+            # Get primary category ID
+            if "primaryCategory" in i:
+                primary_cat = i["primaryCategory"]
+                categories["primary_category_id"] = primary_cat.get("categoryId", "")
+                categories["first_level_id"] = primary_cat.get("categoryId", "")
+                categories["first_level"] = primary_cat.get("categoryName", "")
+            
+            # Get categories array (multiple categories per item)
+            if "categories" in i and isinstance(i["categories"], list):
+                categories["all_categories"] = []
+                category_names = []
+                
+                for cat in i["categories"]:
+                    if isinstance(cat, dict):
+                        cat_name = cat.get("categoryName", "")
+                        cat_id = cat.get("categoryId", "")
+                        if cat_name:
+                            categories["all_categories"].append({
+                                "name": cat_name,
+                                "id": cat_id
+                            })
+                            category_names.append(cat_name)
+                
+                # Build category path from category names
+                if category_names:
+                    categories["category_path"] = " > ".join(category_names)
+                    
+                    # Set first and second level from categories array
+                    if len(category_names) >= 1:
+                        categories["first_level"] = category_names[0]
+                    if len(category_names) >= 2:
+                        categories["second_level"] = category_names[1]
+                        if len(categories["all_categories"]) >= 2:
+                            categories["second_level_id"] = categories["all_categories"][1].get("id", "")
+            
+            # Fallback: try to extract from categoryPath if available
+            if "categoryPath" in i and not categories["category_path"]:
+                categories["category_path"] = i["categoryPath"]
+                # Split path to get individual levels
+                path_parts = i["categoryPath"].split(" > ")
+                if len(path_parts) >= 1:
+                    categories["first_level"] = path_parts[0].strip()
+                if len(path_parts) >= 2:
+                    categories["second_level"] = path_parts[1].strip()
+            
             try:
                 product = ProductSummary(
                     product_id=i["itemId"],
@@ -304,6 +360,7 @@ def search_products_ebay_single_page(query: str, page: int = 1, min_price: float
                     marketplace="ebay",
                     sold_count=sold_count,
                     rating=rating,
+                    categories=categories,
                 )
                 results.append(product.model_dump())
             except Exception as validation_error:

@@ -1,5 +1,6 @@
 // Advanced search filters and sorting component
 import React, { useState, useEffect } from 'react';
+import CategoryTreeFilter from './CategoryTreeFilter';
 
 const AdvancedSearchFilters = ({ 
   onFiltersChange, 
@@ -54,7 +55,27 @@ const AdvancedSearchFilters = ({
         .filter(Boolean)
     )].sort();
     setAvailableBrands(brands);
-  }, [searchResults]);
+    
+    // Extract categories from search results if not provided
+    if (availableCategories.length === 0 && searchResults.length > 0) {
+      const extractedCategories = [...new Set(
+        searchResults
+          .map(product => {
+            // Handle both old format (category string) and new format (categories object)
+            if (product.categories) {
+              return product.categories.first_level || product.categories.category;
+            }
+            return product.category;
+          })
+          .filter(Boolean)
+      )].sort();
+      
+      // Update available categories (this would typically come from parent component)
+      if (extractedCategories.length > 0) {
+        console.log('📦 Extracted categories from search results:', extractedCategories);
+      }
+    }
+  }, [searchResults, availableCategories]);
 
   useEffect(() => {
     onFiltersChange(filters);
@@ -194,24 +215,13 @@ const AdvancedSearchFilters = ({
           </div>
         </div>
 
-        {/* Categories */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Categories</label>
-          <select
-            multiple
-            value={filters.categories}
-            onChange={(e) => {
-              const values = Array.from(e.target.selectedOptions, option => option.value);
-              handleFilterChange('categories', values);
-            }}
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm h-20"
-          >
-            {availableCategories.map(category => (
-              <option key={category} value={category}>
-                {category.charAt(0).toUpperCase() + category.slice(1)}
-              </option>
-            ))}
-          </select>
+        {/* Categories - Hierarchical Tree */}
+        <div className="md:col-span-2">
+          <CategoryTreeFilter 
+            searchResults={searchResults}
+            selectedCategories={filters.categories}
+            onCategoryChange={(categories) => handleFilterChange('categories', categories)}
+          />
         </div>
 
         {/* Marketplaces */}

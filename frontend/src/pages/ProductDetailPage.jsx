@@ -925,17 +925,7 @@ const ProductDetailPage = () => {
         {marketplace === "aliexpress" && (
           <div className="mt-3 pt-3 border-t border-green-200">
             <div className="text-xs text-gray-500 leading-relaxed">
-              <span className="text-gray-400">*</span> Shipping costs are estimates. Final costs may vary based on AliExpress promotions, cart total, and Choice program eligibility.{" "}
-              {product?.affiliate_link && (
-                <a 
-                  href={product.affiliate_link} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-green-600 hover:text-green-700 underline"
-                >
-                  Check exact shipping on AliExpress
-                </a>
-              )}
+              <span className="text-gray-400">*</span> Shipping costs are estimates. Final costs may vary based on AliExpress promotions, cart total, and Choice program eligibility.
             </div>
           </div>
         )}
@@ -961,7 +951,11 @@ const ProductDetailPage = () => {
           {returnPolicy.return_period && (
             <div className="flex justify-between">
               <span className="text-gray-600">Period:</span>
-              <span className="font-medium">{returnPolicy.return_period} days</span>
+              <span className="font-medium">
+                {returnPolicy.return_period.toString().toLowerCase().includes('day') 
+                  ? returnPolicy.return_period 
+                  : `${returnPolicy.return_period} days`}
+              </span>
             </div>
           )}
 

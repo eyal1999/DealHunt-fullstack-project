@@ -18,7 +18,15 @@ const SearchResultsLayout = ({
   const [currentFilters, setCurrentFilters] = useState({});
 
   // Available categories and marketplaces from results
-  const availableCategories = [...new Set(searchResults.map(p => p.category).filter(Boolean))];
+  const availableCategories = [...new Set(
+    searchResults.map(p => {
+      // Handle both old format (category string) and new format (categories object)
+      if (p.categories) {
+        return p.categories.first_level || p.categories.category;
+      }
+      return p.category;
+    }).filter(Boolean)
+  )];
   const availableMarketplaces = [...new Set(searchResults.map(p => p.marketplace).filter(Boolean))];
 
   useEffect(() => {
@@ -30,6 +38,56 @@ const SearchResultsLayout = ({
     const filtered = applyFilters(searchResults, filters);
     setFilteredResults(filtered);
     onFiltersChange && onFiltersChange(filters);
+  };
+
+  // Category name normalization utility (same as CategoryTreeFilter)
+  const normalizeCategoryName = (name, productTitle = '') => {
+    if (!name) return '';
+    
+    // Convert to string and trim
+    let normalized = name.toString().trim();
+    
+    // Smart categorization based on product title
+    const titleLower = productTitle.toLowerCase();
+    if (titleLower && (
+      titleLower.includes('stand') || 
+      titleLower.includes('holder') || 
+      titleLower.includes('mount') ||
+      titleLower.includes('bracket')
+    )) {
+      // Check if it's a computer/laptop related stand
+      if (titleLower.includes('laptop') || 
+          titleLower.includes('notebook') || 
+          titleLower.includes('tablet') || 
+          titleLower.includes('ipad') ||
+          titleLower.includes('monitor') ||
+          titleLower.includes('computer')) {
+        // Override category for laptop/computer stands from any marketplace
+        if (normalized === 'Computer & Office' || 
+            normalized === 'Consumer Electronics' ||
+            normalized === 'Laptop Parts & Accessories') {
+          return 'Stands, Holders & Car Mounts';
+        }
+      }
+    }
+    
+    // Handle specific known variations
+    const categoryMappings = {
+      'Mounts, Stands & Holders': 'Stands, Holders & Car Mounts',
+      'Stands, Holders & Car Mounts': 'Stands, Holders & Car Mounts',
+      'Laptop & Desktop Accessories': 'Laptop & Desktop Accessories',
+      'Computer & Office': 'Computer & Office',
+      'Computers/Tablets & Networking': 'Computers/Tablets & Networking',
+      'Consumer Electronics': 'Consumer Electronics',
+      'Camera & Photo': 'Camera & Photo'
+    };
+    
+    // Apply mapping if exists
+    if (categoryMappings[normalized]) {
+      normalized = categoryMappings[normalized];
+    }
+    
+    return normalized;
   };
 
   const applyFilters = (results, filters) => {
@@ -45,11 +103,43 @@ const SearchResultsLayout = ({
       });
     }
 
-    // Categories filter
+    // Categories filter - handle hierarchical selections
     if (filters.categories?.length > 0) {
-      filtered = filtered.filter(product => 
-        filters.categories.includes(product.category)
-      );
+      filtered = filtered.filter(product => {
+        // Get product category information (same logic as CategoryTreeFilter)
+        let firstLevel = '';
+        let secondLevel = '';
+        
+        if (product.categories && typeof product.categories === 'object') {
+          firstLevel = product.categories.first_level || product.categories.category || '';
+          secondLevel = product.categories.second_level || '';
+        } else if (typeof product.categories === 'string') {
+          firstLevel = product.categories;
+        } else if (product.category) {
+          firstLevel = product.category;
+        }
+        
+        // Clean, validate, and normalize category names (same as CategoryTreeFilter)
+        firstLevel = normalizeCategoryName(firstLevel, product.title);
+        secondLevel = normalizeCategoryName(secondLevel, product.title);
+        
+        // Only process valid categories (same validation as CategoryTreeFilter)
+        if (firstLevel && firstLevel !== 'N/A' && firstLevel.length > 1) {
+          // Check if product matches any selected category paths
+          return filters.categories.some(selectedCategory => {
+            // Handle hierarchical category paths (e.g., "Electronics > Phone Accessories")
+            if (selectedCategory.includes(' > ')) {
+              const [selectedFirst, selectedSecond] = selectedCategory.split(' > ');
+              return firstLevel === selectedFirst && secondLevel === selectedSecond;
+            } else {
+              // Handle single-level category selection
+              return firstLevel === selectedCategory;
+            }
+          });
+        }
+        
+        return false; // No valid category found
+      });
     }
 
     // Marketplaces filter

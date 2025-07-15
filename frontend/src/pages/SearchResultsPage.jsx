@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import ProductCard from "../components/product/ProductCard";
+import CategoryTreeFilter from "../components/search/CategoryTreeFilter";
 import { productService } from "../api/apiServices";
 import { useInfiniteScroll } from "../hooks/useInfiniteScroll";
 import { initSearchPageAnimations } from "../utils/scrollReveal";
@@ -37,11 +38,16 @@ const SearchResultsPage = () => {
     };
   };
   
-  const getInitialCategoryFilter = () => searchParams.get("category_filter") || "all";
+  const getInitialSelectedCategories = () => {
+    const categoryParam = searchParams.get("categories");
+    // Use pipe (|) as delimiter since category names can contain commas
+    return categoryParam ? categoryParam.split('|').map(cat => cat.trim()).filter(Boolean) : [];
+  };
   const getInitialSortBy = () => searchParams.get("sort") || "price_low";
 
   // ====== PRODUCT DATA STATE ======
   const [products, setProducts] = useState([]);
+  const [allProducts, setAllProducts] = useState([]); // Store all products for category tree building
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [totalItems, setTotalItems] = useState(0);
@@ -56,7 +62,7 @@ const SearchResultsPage = () => {
   const [sortBy, setSortBy] = useState(getInitialSortBy);
   const [priceRange, setPriceRange] = useState(getInitialPriceRange);
   const [marketplaceFilters, setMarketplaceFilters] = useState(getInitialMarketplaceFilters);
-  const [categoryFilter, setCategoryFilter] = useState(getInitialCategoryFilter);
+  const [selectedCategories, setSelectedCategories] = useState(getInitialSelectedCategories);
   const [availableCategories, setAvailableCategories] = useState([]);
 
   // ====== FILTER FUNCTIONS ======
@@ -337,6 +343,7 @@ const SearchResultsPage = () => {
     return result;
   }, []);
 
+
   /**
    * Apply client-side filters to products
    * Since your backend doesn't support these filters yet, we'll filter on frontend
@@ -369,100 +376,65 @@ const SearchResultsPage = () => {
         // Check if this specific product's marketplace is enabled
         const marketplaceAllowed = marketplaceFilters[productMarketplace] === true;
 
-        // Category filter
+        // Category filter - handle hierarchical selections
         let categoryMatches = true;
-        if (categoryFilter !== "all") {
+        if (selectedCategories.length > 0) {
           categoryMatches = false;
           
-          // First check actual category fields
-          if (product.categories) {
-            if (Array.isArray(product.categories)) {
-              categoryMatches = product.categories.some(cat => 
-                cat && cat.toLowerCase().includes(categoryFilter.toLowerCase())
-              );
-            } else if (typeof product.categories === 'object') {
-              categoryMatches = Object.values(product.categories).some(cat => 
-                cat && cat.toLowerCase().includes(categoryFilter.toLowerCase())
-              );
-            } else if (typeof product.categories === 'string') {
-              categoryMatches = product.categories.toLowerCase().includes(categoryFilter.toLowerCase());
-            }
-          }
-          
-          // If no category fields, use fallback logic based on title
-          if (!categoryMatches && product.title) {
-            const title = product.title.toLowerCase();
-            const filterLower = categoryFilter.toLowerCase();
+          try {
+            // Handle marketplace-specific category hierarchy (same as CategoryTreeFilter)
+            let parentCategory = '';
+            let childCategory = '';
             
-            // Create a comprehensive matching system
-            const categoryKeywords = {
-              "cables": ["cable", "charger", "adapter", "cord", "wire"],
-              "mobile": ["phone", "mobile", "smartphone", "iphone", "samsung", "android"],
-              "audio": ["headphone", "earphone", "earbuds", "airpods", "headset"],
-              "cases": ["case", "cover", "protector", "screen protector", "tempered glass"],
-              "watches": ["watch", "smartwatch", "apple watch", "fitbit", "garmin"],
-              "computers": ["laptop", "computer", "pc", "desktop", "monitor", "keyboard", "mouse"],
-              "tablets": ["tablet", "ipad", "kindle", "e-reader"],
-              "speakers": ["speaker", "bluetooth", "soundbar", "amplifier", "subwoofer"],
-              "gaming": ["gaming", "game", "console", "playstation", "xbox", "nintendo", "controller"],
-              "cameras": ["camera", "photography", "lens", "tripod", "gopro", "drone"],
-              "tv": ["tv", "television", "projector", "streaming", "roku", "firestick"],
-              "power": ["power bank", "battery", "solar", "generator", "inverter"],
-              "lighting": ["led", "lighting", "lamp", "bulb", "strip light", "flashlight"],
-              "home": ["home", "kitchen", "appliance", "microwave", "blender", "coffee"],
-              "furniture": ["furniture", "chair", "table", "desk", "sofa", "bed", "mattress"],
-              "garden": ["garden", "plant", "seed", "tool", "lawn", "outdoor"],
-              "storage": ["storage", "organizer", "box", "container", "shelf", "rack"],
-              "security": ["security", "camera", "alarm", "lock", "doorbell", "surveillance"],
-              "smart": ["smart home", "alexa", "google home", "automation", "thermostat"],
-              "clothing": ["clothing", "shirt", "dress", "pants", "jeans", "hoodie", "jacket"],
-              "shoes": ["shoes", "sneakers", "boots", "sandals", "heels", "slippers"],
-              "bags": ["bag", "backpack", "wallet", "purse", "handbag", "luggage", "suitcase"],
-              "jewelry": ["jewelry", "necklace", "bracelet", "ring", "earrings", "pendant"],
-              "eyewear": ["sunglasses", "glasses", "eyewear", "frames", "lens"],
-              "fashion": ["hat", "cap", "beanie", "scarf", "gloves", "belt"],
-              "beauty": ["beauty", "makeup", "cosmetic", "lipstick", "foundation", "mascara"],
-              "skincare": ["skincare", "cream", "serum", "moisturizer", "cleanser", "mask"],
-              "hair": ["hair", "shampoo", "conditioner", "hair dryer", "straightener", "curler"],
-              "health": ["health", "vitamin", "supplement", "protein", "fitness", "workout"],
-              "wellness": ["massage", "spa", "aromatherapy", "essential oil", "diffuser"],
-              "sports": ["sport", "exercise", "gym", "weight", "dumbbell", "yoga"],
-              "bikes": ["bike", "bicycle", "cycling", "skateboard", "scooter"],
-              "recreation": ["fishing", "camping", "hiking", "tent", "sleeping bag"],
-              "water": ["swimming", "pool", "beach", "swimsuit", "goggles"],
-              "toys": ["toy", "kids", "children", "doll", "puzzle", "lego", "game"],
-              "baby": ["baby", "infant", "diaper", "stroller", "car seat", "bottle"],
-              "education": ["educational", "learning", "book", "school", "student"],
-              "automotive": ["car", "automotive", "vehicle", "auto", "truck", "motorcycle"],
-              "auto": ["tire", "wheel", "brake", "engine", "oil", "filter"],
-              "tools": ["tool", "drill", "hammer", "screwdriver", "wrench", "saw"],
-              "industrial": ["industrial", "construction", "safety", "equipment", "machinery"],
-              "crafts": ["craft", "sewing", "knitting", "fabric", "thread", "needle"],
-              "arts": ["art", "paint", "brush", "canvas", "drawing", "sketch"],
-              "music": ["music", "instrument", "guitar", "piano", "violin", "microphone"],
-              "books": ["book", "novel", "textbook", "ebook", "magazine", "comic"],
-              "movies": ["movie", "dvd", "blu-ray", "cd", "vinyl", "music"],
-              "pet": ["pet", "dog", "cat", "bird", "fish", "aquarium"],
-              "food": ["food", "snack", "tea", "coffee", "chocolate", "candy"],
-              "office": ["office", "desk", "chair", "printer", "paper", "pen"],
-              "business": ["business", "professional", "conference", "presentation", "meeting"],
-              "collectibles": ["collectible", "vintage", "antique", "rare", "limited edition", "memorabilia", "coin", "stamp", "trading card", "figurine", "model"]
-            };
-            
-            // Check if any keywords match
-            for (const [category, keywords] of Object.entries(categoryKeywords)) {
-              if (filterLower.includes(category)) {
-                categoryMatches = keywords.some(keyword => title.includes(keyword));
-                if (categoryMatches) break;
+            if (product.categories && typeof product.categories === 'object') {
+              if (product.marketplace === 'ebay') {
+                // eBay: first_level is child, second_level is parent
+                parentCategory = product.categories.second_level || '';
+                childCategory = product.categories.first_level || '';
+              } else if (product.marketplace === 'aliexpress') {
+                // AliExpress: first_level is parent, second_level is child
+                parentCategory = product.categories.first_level || '';
+                childCategory = product.categories.second_level || '';
+              } else {
+                // Default fallback for unknown marketplaces
+                parentCategory = product.categories.first_level || product.categories.category || '';
+                childCategory = product.categories.second_level || '';
               }
+            } else if (typeof product.categories === 'string') {
+              parentCategory = product.categories;
+            } else if (product.category) {
+              parentCategory = product.category;
             }
+            
+            // Clean and validate category names
+            parentCategory = parentCategory?.toString().trim() || '';
+            childCategory = childCategory?.toString().trim() || '';
+            
+            
+            // Only process valid categories (same validation as CategoryTreeFilter)
+            if (parentCategory && parentCategory !== 'N/A' && parentCategory.length > 1) {
+                // Check if product matches any selected category paths
+                categoryMatches = selectedCategories.some(selectedCategory => {
+                  // Handle hierarchical category paths (e.g., "Computer & Office > Laptop Parts & Accessories")
+                  if (selectedCategory.includes(' > ')) {
+                    const [selectedParent, selectedChild] = selectedCategory.split(' > ');
+                    return parentCategory === selectedParent && childCategory === selectedChild;
+                  } else {
+                    // Handle single-level category selection (parent category)
+                    return parentCategory === selectedCategory;
+                  }
+                });
+              }
+          } catch (error) {
+            console.warn('Category filtering error for product:', product.product_id, error);
+            categoryMatches = true; // Include product if category filtering fails
           }
         }
 
         return priceInRange && marketplaceAllowed && categoryMatches;
       });
     },
-    [priceRange.min, priceRange.max, marketplaceFilters.aliexpress, marketplaceFilters.ebay, categoryFilter]
+    [priceRange.min, priceRange.max, marketplaceFilters.aliexpress, marketplaceFilters.ebay, selectedCategories]
   );
 
   // ====== SORTING HELPER ======
@@ -488,6 +460,7 @@ const SearchResultsPage = () => {
   const fetchInitialProducts = useCallback(async () => {
     if (!query && !category) {
       setProducts([]);
+      setAllProducts([]);
       setIsInitialLoading(false);
       return;
     }
@@ -515,6 +488,9 @@ const SearchResultsPage = () => {
         marketplaceFilters.ebay
       );
 
+      // Store all products for category tree building
+      setAllProducts(response.results || []);
+      
       // Apply client-side filters to the results
       const filteredResults = applyClientFilters(response.results || []);
 
@@ -526,6 +502,7 @@ const SearchResultsPage = () => {
       console.error("Error fetching initial products:", err);
       setError(err.message || "Failed to fetch products. Please try again.");
       setProducts([]);
+      setAllProducts([]);
       setHasMore(false);
     } finally {
       setIsInitialLoading(false);
@@ -635,7 +612,9 @@ const SearchResultsPage = () => {
     const urlMaxPrice = searchParams.get("max_price") || "";
     const urlAliexpress = searchParams.get("aliexpress");
     const urlEbay = searchParams.get("ebay");
-    const urlCategoryFilter = searchParams.get("category_filter") || "all";
+    const urlSelectedCategories = searchParams.get("categories");
+    // Use pipe (|) as delimiter since category names can contain commas
+    const urlCategoriesArray = urlSelectedCategories ? urlSelectedCategories.split('|').map(cat => cat.trim()).filter(Boolean) : [];
     
     // Only update state if values are different to avoid infinite loops
     if (sortBy !== urlSort) setSortBy(urlSort);
@@ -653,7 +632,10 @@ const SearchResultsPage = () => {
       setMarketplaceFilters(urlMarketplaceFilters);
     }
     
-    if (categoryFilter !== urlCategoryFilter) setCategoryFilter(urlCategoryFilter);
+    // Check if categories arrays are different
+    const categoriesChanged = selectedCategories.length !== urlCategoriesArray.length ||
+      selectedCategories.some(cat => !urlCategoriesArray.includes(cat));
+    if (categoriesChanged) setSelectedCategories(urlCategoriesArray);
   }, [searchParams.toString()]); // Use toString() to avoid dependency on searchParams object
 
   // ====== EVENT HANDLERS ======
@@ -694,11 +676,12 @@ const SearchResultsPage = () => {
   };
 
   /**
-   * Handle category filter changes
+   * Handle hierarchical category changes
    */
-  const handleCategoryChange = (selectedCategory) => {
-    setCategoryFilter(selectedCategory);
-    updateUrlParams({ category_filter: selectedCategory });
+  const handleCategoryChange = (categories) => {
+    setSelectedCategories(categories);
+    // Use pipe (|) as delimiter since category names can contain commas
+    updateUrlParams({ categories: categories.join('|') });
     // Effect will trigger re-filter of current results
   };
 
@@ -719,7 +702,7 @@ const SearchResultsPage = () => {
     
     setPriceRange(defaultFilters);
     setMarketplaceFilters(defaultMarketplaceFilters);
-    setCategoryFilter(defaultCategory);
+    setSelectedCategories([]);
     setSortBy(defaultSort);
     
     // Clear all filter parameters from URL
@@ -728,7 +711,7 @@ const SearchResultsPage = () => {
       max_price: "",
       aliexpress: true,
       ebay: true,
-      category_filter: "all",
+      categories: "",
       sort: "price_low"
     });
   };
@@ -899,21 +882,13 @@ const SearchResultsPage = () => {
               </div>
             </div>
 
-            {/* Category Filter */}
+            {/* Hierarchical Category Filter */}
             <div className="category-filter mb-6">
-              <h3 className="font-medium mb-2">Category</h3>
-              <select
-                value={categoryFilter}
-                onChange={(e) => handleCategoryChange(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-              >
-                <option value="all">All Categories</option>
-                {availableCategories.map((category) => (
-                  <option key={category} value={category}>
-                    {category}
-                  </option>
-                ))}
-              </select>
+              <CategoryTreeFilter 
+                searchResults={allProducts}
+                selectedCategories={selectedCategories}
+                onCategoryChange={handleCategoryChange}
+              />
             </div>
 
             {/* Marketplace Filter - RESTORED */}

@@ -115,8 +115,12 @@ def fetch_hot_products(
                             'commission_rate': product.get('hot_product_commission_rate', product.get('commission_rate', 0)),
                             'marketplace': 'aliexpress',
                             'is_hot_product': True,
-                            'category': product.get('first_level_category_name', ''),
-                            'sub_category': product.get('second_level_category_name', ''),
+                            'categories': {
+                                "first_level": product.get('first_level_category_name', ''),
+                                "second_level": product.get('second_level_category_name', ''),
+                                "first_level_id": product.get('first_level_category_id', ''),
+                                "second_level_id": product.get('second_level_category_id', ''),
+                            },
                             'shop_url': product.get('shop_url', ''),
                             'shop_id': product.get('shop_id', '')
                         }

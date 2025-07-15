@@ -32,6 +32,7 @@ class ProductSummary(BaseModel):
     rating: Optional[float] = None
     shipping_cost: Optional[float] = None
     cached_at: Optional[datetime] = None
+    categories: Optional[Dict[str, Any]] = None  # Category information
 
     model_config = ConfigDict(
         from_attributes=True

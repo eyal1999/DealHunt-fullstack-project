@@ -399,6 +399,14 @@ def search_products(query: str, page_no: int = 1, page_size: int = None, min_pri
                 except (ValueError, TypeError, KeyError):
                     shipping_cost = None
             
+            # Extract category information for product summary
+            categories = {
+                "first_level": p.get("first_level_category_name", ""),
+                "second_level": p.get("second_level_category_name", ""),
+                "first_level_id": p.get("first_level_category_id", ""),
+                "second_level_id": p.get("second_level_category_id", ""),
+            }
+            
             summary = ProductSummary(
                 product_id=product_id,
                 title=title,
@@ -411,6 +419,7 @@ def search_products(query: str, page_no: int = 1, page_size: int = None, min_pri
                 sold_count=sold_count,
                 rating=rating,
                 shipping_cost=shipping_cost,
+                categories=categories,
             ).dict()
             
             summaries.append(summary)
@@ -878,26 +887,30 @@ def _estimate_realistic_shipping(item: dict, ship_to_country: str = "US") -> lis
             "led", "light", "bluetooth", "wireless", "gaming"
         ]
         
-        # Determine shipping category
+        # Determine shipping category - AliExpress typically has very low/free shipping
         if any(keyword in product_title for keyword in small_item_keywords):
-            shipping_cost = 1.99 if sale_price < 10 else 2.99
+            shipping_cost = 0 if sale_price >= 5 else 1.99
             delivery_time = "10-25 business days"
         elif any(keyword in product_title for keyword in large_item_keywords):
-            shipping_cost = 15.99 if sale_price < 100 else 25.99
-            delivery_time = "20-50 business days"
+            # AliExpress large items still typically have free/low shipping
+            shipping_cost = 0 if sale_price >= 25 else 4.99
+            delivery_time = "20-45 business days"
         elif any(keyword in product_title for keyword in electronics_keywords):
-            shipping_cost = 4.99 if sale_price < 25 else 7.99
+            shipping_cost = 0 if sale_price >= 15 else 2.99
             delivery_time = "15-35 business days"
         else:
-            # Default shipping for general items
-            if sale_price < 5:
+            # Default shipping for general items - AliExpress typically offers free shipping
+            if sale_price < 3:
+                shipping_cost = 1.99
+            elif sale_price < 10:
                 shipping_cost = 2.99
-            elif sale_price < 15:
-                shipping_cost = 3.99
-            elif sale_price < 30:
-                shipping_cost = 5.99
+            elif sale_price < 20:
+                shipping_cost = 1.99
             else:
-                shipping_cost = 7.99
+                shipping_cost = 0  # Free shipping for items $20+
+        
+        # Safety cap: AliExpress shipping should never exceed $5
+        shipping_cost = min(shipping_cost, 5.00)
         
         # Special handling for very cheap items - often free shipping to encourage purchases
         if sale_price < 3:
@@ -916,11 +929,11 @@ def _estimate_realistic_shipping(item: dict, ship_to_country: str = "US") -> lis
             "estimated_delivery": delivery_time
         }]
         
-        # Add expedited option for items over $10
+        # Add expedited option for items over $10 - keep AliExpress expedited shipping realistic
         if sale_price >= 10:
-            expedited_cost = shipping_cost + 5.00
+            expedited_cost = min(shipping_cost + 3.00, 5.00)  # Cap expedited at $5
             shipping_options.append({
-                "service": "Expedited Shipping",
+                "service": "Expedited Shipping", 
                 "cost": str(expedited_cost),
                 "currency": "USD",
                 "estimated_delivery": "7-15 business days"
@@ -929,10 +942,10 @@ def _estimate_realistic_shipping(item: dict, ship_to_country: str = "US") -> lis
         return shipping_options
         
     except Exception:
-        # Fallback to basic standard shipping
+        # Fallback to basic standard shipping - realistic for AliExpress
         return [{
             "service": "Standard Shipping",
-            "cost": "4.99",
+            "cost": "2.99",
             "currency": "USD",
             "estimated_delivery": "15-45 business days"
         }]
