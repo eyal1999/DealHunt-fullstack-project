@@ -72,15 +72,21 @@ const api = {
   // Helper methods
   get: (endpoint, params = {}) => {
     // Build URL with query parameters
-    const url = new URL(`${API_BASE_URL}${endpoint}`);
-    Object.keys(params).forEach((key) => {
-      if (params[key] !== undefined && params[key] !== null) {
-        url.searchParams.append(key, params[key]);
-      }
-    });
+    let finalEndpoint = endpoint;
+    
+    // Handle query parameters
+    if (Object.keys(params).length > 0) {
+      const searchParams = new URLSearchParams();
+      Object.keys(params).forEach((key) => {
+        if (params[key] !== undefined && params[key] !== null) {
+          searchParams.append(key, params[key]);
+        }
+      });
+      finalEndpoint = `${endpoint}?${searchParams.toString()}`;
+    }
 
-    // Make GET request - use full URL string
-    return api.fetch(url.toString().replace(API_BASE_URL, ""), {
+    // Make GET request
+    return api.fetch(finalEndpoint, {
       method: "GET",
     });
   },

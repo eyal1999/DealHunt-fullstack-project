@@ -1,26 +1,54 @@
-#Use Node.js official image
-FROM node:18-alpine
+# Multi-stage build for React frontend
+FROM node:18-alpine AS builder
 
-#Set working directory
-WORKDIR /frontend
+# Set working directory
+WORKDIR /app
 
-#Copy package files first (for better Docker layer caching)
+# Copy package files
 COPY package*.json ./
 
-#Install dependencies
-RUN npm ci --only=production=false
+# Install dependencies
+RUN npm ci --only=production
 
-#Copy source code
+# Copy source code
 COPY . .
 
-#Build the application
+# Set build-time environment variables
+ARG VITE_API_URL
+ENV VITE_API_URL=${VITE_API_URL}
+
+# Build the application
 RUN npm run build
 
-#Install a simple HTTP server to serve the built files
-RUN npm install -g serve
+# Production stage with nginx
+FROM nginx:alpine
 
-#Expose port 3000
-EXPOSE 3000
+# Copy built files from builder stage
+COPY --from=builder /app/dist /usr/share/nginx/html
 
-#Start the application
-CMD ["serve", "-s", "dist", "-l", "3000"]
+# Copy nginx configuration
+COPY nginx.conf /etc/nginx/nginx.conf
+
+# Create nginx configuration for React Router
+RUN echo 'server {' > /etc/nginx/conf.d/default.conf && \
+    echo '    listen 80;' >> /etc/nginx/conf.d/default.conf && \
+    echo '    server_name localhost;' >> /etc/nginx/conf.d/default.conf && \
+    echo '    root /usr/share/nginx/html;' >> /etc/nginx/conf.d/default.conf && \
+    echo '    index index.html index.htm;' >> /etc/nginx/conf.d/default.conf && \
+    echo '    location / {' >> /etc/nginx/conf.d/default.conf && \
+    echo '        try_files $uri $uri/ /index.html;' >> /etc/nginx/conf.d/default.conf && \
+    echo '    }' >> /etc/nginx/conf.d/default.conf && \
+    echo '    location /api/ {' >> /etc/nginx/conf.d/default.conf && \
+    echo '        proxy_pass http://fastapi_backend:8000/;' >> /etc/nginx/conf.d/default.conf && \
+    echo '        proxy_set_header Host $host;' >> /etc/nginx/conf.d/default.conf && \
+    echo '        proxy_set_header X-Real-IP $remote_addr;' >> /etc/nginx/conf.d/default.conf && \
+    echo '        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;' >> /etc/nginx/conf.d/default.conf && \
+    echo '        proxy_set_header X-Forwarded-Proto $scheme;' >> /etc/nginx/conf.d/default.conf && \
+    echo '    }' >> /etc/nginx/conf.d/default.conf && \
+    echo '}' >> /etc/nginx/conf.d/default.conf
+
+# Expose port 80
+EXPOSE 80
+
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]

@@ -89,7 +89,7 @@ const ProductRecommendations = ({
             `product_title=${encodeURIComponent(title)}&` +
             `current_price=${numericPrice}&` +
             `category=${encodeURIComponent(category)}&` +
-            `limit_per_type=15`,
+            `limit_per_type=8`,
             {
               signal: AbortSignal.timeout(10000)
             }
