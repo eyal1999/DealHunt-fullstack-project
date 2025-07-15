@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import ProductCard from "../components/product/ProductCard";
 import CategoryTreeFilter from "../components/search/CategoryTreeFilter";
+import SearchResultsSkeleton, { ProductCardSkeleton, ProductGridSkeleton } from "../components/loading/SearchResultsSkeleton";
 import { productService } from "../api/apiServices";
 import { useInfiniteScroll } from "../hooks/useInfiniteScroll";
 import { initSearchPageAnimations } from "../utils/scrollReveal";
@@ -54,6 +55,8 @@ const SearchResultsPage = () => {
 
   // ====== UI STATE ======
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isContentReady, setIsContentReady] = useState(false);
+  const [isFirstLoad, setIsFirstLoad] = useState(true);
   const [error, setError] = useState(null);
   
 
@@ -462,11 +465,13 @@ const SearchResultsPage = () => {
       setProducts([]);
       setAllProducts([]);
       setIsInitialLoading(false);
+      setIsContentReady(true);
       return;
     }
 
     try {
       setIsInitialLoading(true);
+      setIsContentReady(false);
       setError(null);
       setCurrentPage(1);
       setHasMore(true);
@@ -497,6 +502,14 @@ const SearchResultsPage = () => {
       setProducts(filteredResults);
       setTotalItems(response.pagination?.total_items || 0);
       setHasMore(response.pagination?.has_next || false);
+      
+      // Add a small delay to ensure smooth transition
+      setTimeout(() => {
+        setIsContentReady(true);
+        if (isFirstLoad) {
+          setIsFirstLoad(false);
+        }
+      }, 100);
       
     } catch (err) {
       console.error("Error fetching initial products:", err);
@@ -779,6 +792,15 @@ const SearchResultsPage = () => {
   }, [products, applyClientFilters, sortBy]);
   const combinedError = error || infiniteScrollError;
 
+  // Show full page skeleton on first load
+  if (isFirstLoad && (isInitialLoading || !isContentReady)) {
+    return (
+      <div>
+        <SearchResultsSkeleton showHeader={true} />
+      </div>
+    );
+  }
+
   return (
     <div>
       {/* Search Results Header */}
@@ -815,9 +837,9 @@ const SearchResultsPage = () => {
       )}
 
       {/* Search Results Layout */}
-      <div className="flex flex-col md:flex-row gap-6">
+      <div className={`flex flex-col md:flex-row gap-6 ${isFirstLoad ? 'fade-in opacity-0' : 'opacity-100'}`}>
         {/* Filters Sidebar - RESTORED ORIGINAL FUNCTIONALITY */}
-        <div className="w-full md:w-1/4">
+        <div className={`w-full md:w-1/4 ${isFirstLoad ? 'fade-in stagger-1' : ''}`}>
           <div className="filters-sidebar bg-white rounded-lg shadow p-4">
             <div className="mb-6">
               <h2 className="text-lg font-semibold mb-4">Filters</h2>
@@ -928,7 +950,7 @@ const SearchResultsPage = () => {
         </div>
 
         {/* Main Content Area */}
-        <div className="w-full md:w-3/4">
+        <div className={`w-full md:w-3/4 ${isFirstLoad ? 'fade-in stagger-2' : ''}`}>
           {/* Sort Controls - RESTORED original design */}
           <div className="sort-controls flex justify-between items-center mb-4 p-4 bg-gray-50 rounded-lg">
             <div className="text-sm text-gray-600">
@@ -954,10 +976,8 @@ const SearchResultsPage = () => {
           </div>
 
           {/* Products Grid */}
-          {isInitialLoading ? (
-            <div className="flex justify-center items-center h-64">
-              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-            </div>
+          {isInitialLoading || !isContentReady ? (
+            <ProductGridSkeleton />
           ) : error ? (
             <div className="text-center py-12">
               <p className="text-xl font-medium mb-4">Something went wrong</p>
@@ -974,11 +994,11 @@ const SearchResultsPage = () => {
           ) : filteredAndSortedProducts.length > 0 ? (
             <>
               {/* Products Grid */}
-              <div className="search-results-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
+              <div className={`search-results-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch fade-in ${isContentReady ? 'opacity-100' : 'opacity-0'}`}>
                 {filteredAndSortedProducts.map((product, index) => {
                   
                   return (
-                    <div key={`${product.product_id}-${product.marketplace}-${index}`} className="search-result-item">
+                    <div key={`${product.product_id}-${product.marketplace}-${index}`} className={`search-result-item fade-in stagger-${Math.min(index % 4 + 1, 4)}`}>
                       <ProductCard
                         product={product}
                       />
@@ -995,11 +1015,20 @@ const SearchResultsPage = () => {
                     className="flex justify-center items-center py-8"
                   >
                     {isLoadingMore ? (
-                      <div className="flex items-center space-x-3">
-                        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
-                        <span className="text-gray-600">
-                          Loading more products...
-                        </span>
+                      <div className="w-full">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+                          {[...Array(6)].map((_, i) => (
+                            <ProductCardSkeleton key={i} />
+                          ))}
+                        </div>
+                        <div className="flex justify-center">
+                          <div className="flex items-center space-x-3">
+                            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
+                            <span className="text-gray-600">
+                              Loading more products...
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     ) : infiniteScrollError ? (
                       <div className="text-center">

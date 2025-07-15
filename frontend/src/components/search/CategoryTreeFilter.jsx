@@ -41,11 +41,8 @@ const CategoryTreeFilter = ({
   // Build hierarchical category structure from search results
   const categoryTree = useMemo(() => {
     const tree = {};
-    const categoryMarketplaces = {}; // Track which marketplace each category comes from
     
     searchResults.forEach((product, index) => {
-      
-      
       // Handle marketplace-specific category hierarchy
       let parentCategory = '';
       let childCategory = '';
@@ -87,7 +84,6 @@ const CategoryTreeFilter = ({
           subcategories: {},
           marketplace: product.marketplace // Track marketplace for this category
         };
-        categoryMarketplaces[parentCategory] = product.marketplace;
       }
       
       tree[parentCategory].count += 1;

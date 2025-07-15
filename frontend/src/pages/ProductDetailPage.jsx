@@ -13,6 +13,7 @@ import { useAutoWishlist } from "../hooks/useAutoWishlist";
 import { getImageUrl, getFallbackImageUrl } from "../utils/simpleImageProxy";
 import { initProductPageAnimations, cleanupAnimations } from "../utils/scrollReveal";
 import ProductRecommendations from "../components/recommendations/ProductRecommendations";
+import ProductDetailSkeleton from "../components/loading/ProductDetailSkeleton";
 
 // Simple Image Component for Product Details
 const ProductImage = ({
@@ -394,6 +395,7 @@ const ProductDetailPage = () => {
   // State management
   const [product, setProduct] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isContentReady, setIsContentReady] = useState(false);
   const [error, setError] = useState(null);
   const [activeImage, setActiveImage] = useState(0);
   const [showVideo, setShowVideo] = useState(false);
@@ -418,6 +420,11 @@ const ProductDetailPage = () => {
       // Use the existing productService instead of raw fetch
       const data = await productService.getProductDetails(marketplace, id);
       setProduct(data);
+      
+      // Add a small delay to ensure smooth transition
+      setTimeout(() => {
+        setIsContentReady(true);
+      }, 100);
     } catch (err) {
       console.error("Error fetching product detail:", err);
       let errorMessage = "Failed to load product details";
@@ -437,6 +444,10 @@ const ProductDetailPage = () => {
 
   useEffect(() => {
     if (marketplace && id) {
+      // Reset states when navigating to a new product
+      setIsContentReady(false);
+      setProduct(null);
+      setError(null);
       fetchProductDetail();
     }
   }, [fetchProductDetail]);
@@ -1017,14 +1028,11 @@ const ProductDetailPage = () => {
     return breadcrumbs;
   }, []);
 
-  // Loading state
-  if (isLoading) {
+  // Loading state - Show skeleton while loading
+  if (isLoading || !isContentReady) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mb-4 mx-auto"></div>
-          <p className="text-gray-600">Loading product details...</p>
-        </div>
+      <div className="max-w-6xl mx-auto px-4 py-8">
+        <ProductDetailSkeleton />
       </div>
     );
   }
@@ -1073,7 +1081,8 @@ const ProductDetailPage = () => {
 
   // Main render
   return (
-    <div>
+    <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className={`fade-in ${isContentReady ? 'opacity-100' : 'opacity-0'}`}>
       {/* Enhanced Breadcrumbs */}
       <div className="product-breadcrumbs text-sm text-gray-500 mb-6">
         {formatBreadcrumbs(product).map((crumb, index) => (
@@ -1107,16 +1116,18 @@ const ProductDetailPage = () => {
       {/* Product Content */}
       <div className="product-detail-content grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* ENHANCED Product Images & Video - Left Column */}
-        <ProductImageSection
-          product={product}
-          activeImage={activeImage}
-          setActiveImage={setActiveImage}
-          showVideo={showVideo}
-          setShowVideo={setShowVideo}
-        />
+        <div className="fade-in stagger-1">
+          <ProductImageSection
+            product={product}
+            activeImage={activeImage}
+            setActiveImage={setActiveImage}
+            showVideo={showVideo}
+            setShowVideo={setShowVideo}
+          />
+        </div>
 
         {/* Product Info - Middle Column */}
-        <div className="product-info lg:col-span-1">
+        <div className="product-info lg:col-span-1 fade-in stagger-2">
           {/* Title and Basic Info */}
           <div className="product-title-section mb-4">
             <h1 className="text-2xl font-bold text-gray-800 mb-3">
@@ -1282,7 +1293,7 @@ const ProductDetailPage = () => {
         </div>
 
         {/* Additional Info - Right Column */}
-        <div className="product-sidebar lg:col-span-1 space-y-4">
+        <div className="product-sidebar lg:col-span-1 space-y-4 fade-in stagger-3">
           {/* Seller/Shop Information */}
           <div className="seller-info-section">
             {formatSellerInfo(product.seller, product.marketplace)}
@@ -1307,10 +1318,13 @@ const ProductDetailPage = () => {
       </div>
 
       {/* Product Recommendations Section */}
-      <ProductRecommendations 
-        product={product} 
-        marketplace={product.marketplace} 
-      />
+      <div className="fade-in stagger-4">
+        <ProductRecommendations 
+          product={product} 
+          marketplace={product.marketplace} 
+        />
+      </div>
+      </div>
     </div>
   );
 };

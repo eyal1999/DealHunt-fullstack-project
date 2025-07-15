@@ -2,6 +2,58 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Shimmer animation keyframes for skeleton loading */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Blur overlay animation */
+@keyframes blurIn {
+  0% {
+    filter: blur(0px);
+  }
+  100% {
+    filter: blur(4px);
+  }
+}
+
+@keyframes blurOut {
+  0% {
+    filter: blur(4px);
+  }
+  100% {
+    filter: blur(0px);
+  }
+}
+
+/* Fade transitions */
+@keyframes fadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeOut {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
 /* Custom base styles that work with Tailwind */
 @layer base {
   html {
@@ -100,4 +152,58 @@
     visibility: visible;
   }
   
+}
+
+/* Movie-style loading animation utilities */
+@layer utilities {
+  .blur-loading {
+    animation: blurIn 0.2s ease-in forwards;
+  }
+  
+  .blur-loaded {
+    animation: blurOut 0.3s ease-out forwards;
+  }
+  
+  .fade-in {
+    animation: fadeIn 0.4s ease-out forwards;
+  }
+  
+  .fade-out {
+    animation: fadeOut 0.3s ease-out forwards;
+  }
+  
+  .stagger-1 {
+    animation-delay: 0.1s;
+  }
+  
+  .stagger-2 {
+    animation-delay: 0.2s;
+  }
+  
+  .stagger-3 {
+    animation-delay: 0.3s;
+  }
+  
+  .stagger-4 {
+    animation-delay: 0.4s;
+  }
+  
+  .skeleton-pulse {
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+  
+  /* Respect reduced motion preference */
+  @media (prefers-reduced-motion: reduce) {
+    .blur-loading,
+    .blur-loaded,
+    .fade-in,
+    .fade-out,
+    .skeleton-pulse {
+      animation: none;
+    }
+    
+    .animate-pulse {
+      animation: none;
+    }
+  }
 }
