@@ -93,7 +93,7 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 @app.get("/")
 def root():
-    return {"message": "Welcome to DealHunt with Google OAuth!"}
+    return {"message": "Welcome to DealHunt!"}
 
 @app.get("/health")
 def health_check():

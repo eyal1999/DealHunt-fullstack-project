@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import ProductCard from '../product/ProductCard';
 
+// Get API base URL from environment
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
 const ProductRecommendations = ({ 
   product, 
   marketplace = 'aliexpress' 
@@ -85,11 +88,11 @@ const ProductRecommendations = ({
           }
           
           const aliResponse = await fetch(
-            `/api/recommendations/aliexpress/comprehensive/${productId}?` +
+            `${API_BASE_URL}/recommendations/aliexpress/comprehensive/${productId}?` +
             `product_title=${encodeURIComponent(title)}&` +
             `current_price=${numericPrice}&` +
             `category=${encodeURIComponent(category)}&` +
-            `limit_per_type=15`,
+            `limit_per_type=8`,
             {
               signal: AbortSignal.timeout(10000)
             }
@@ -179,7 +182,7 @@ const ProductRecommendations = ({
       const page = Math.floor(offset / pageSize) + 1;
       
       const response = await fetch(
-        `/api/search?q=${encodeURIComponent(searchQuery)}&ebay=true&aliexpress=false&page_size=${pageSize}&page=${page}`,
+        `${API_BASE_URL}/search?q=${encodeURIComponent(searchQuery)}&ebay=true&aliexpress=false&page_size=${pageSize}&page=${page}`,
         { signal: AbortSignal.timeout(8000) }
       );
 
@@ -214,7 +217,7 @@ const ProductRecommendations = ({
       const page = Math.floor(offset / pageSize) + 1;
       
       const response = await fetch(
-        `/api/search?q=${encodeURIComponent(searchQuery)}&ebay=false&aliexpress=true&page_size=${pageSize}&page=${page}`,
+        `${API_BASE_URL}/search?q=${encodeURIComponent(searchQuery)}&ebay=false&aliexpress=true&page_size=${pageSize}&page=${page}`,
         { signal: AbortSignal.timeout(8000) }
       );
 

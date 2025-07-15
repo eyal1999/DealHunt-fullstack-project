@@ -51,7 +51,7 @@ const GoogleSignInButton = ({
         // Get the Google Client ID from our backend
         const configResponse = await fetch(
           `${
-            import.meta.env.VITE_API_URL || "http://localhost:8001"
+            import.meta.env.VITE_API_URL || "http://localhost:8000"
           }/auth/google/config`
         );
 

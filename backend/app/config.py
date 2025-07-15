@@ -42,7 +42,11 @@ class Settings(BaseSettings):
     google_client_secret: str = Field(..., validation_alias="GOOGLE_CLIENT_SECRET")
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=[
+            Path(__file__).parent.parent.parent / ".env",  # Root level (Docker) - loaded first
+            Path(__file__).parent.parent / ".env",        # Backend specific
+            Path(__file__).parent.parent / ".env.local"   # Local development (highest priority) - loaded last
+        ],
         env_file_encoding="utf-8",
         extra="ignore"
     )

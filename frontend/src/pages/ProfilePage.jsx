@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import profileService from "../api/profileService";
+import { authService } from "../api/apiServices";
 import { initProfilePageAnimations } from "../utils/scrollReveal";
 
 const ProfilePage = () => {
@@ -8,9 +9,19 @@ const ProfilePage = () => {
 
   const [activeTab, setActiveTab] = useState("profile"); // 'profile' or 'security'
   const [profileData, setProfileData] = useState({
-    fullName: currentUser?.fullName || "",
+    fullName: currentUser?.full_name || "",
     email: currentUser?.email || "",
   });
+
+  // Update profile data when currentUser changes
+  useEffect(() => {
+    if (currentUser) {
+      setProfileData({
+        fullName: currentUser.full_name || "",
+        email: currentUser.email || "",
+      });
+    }
+  }, [currentUser]);
 
   const fileInputRef = useRef(null);
   const [isUploadingPicture, setIsUploadingPicture] = useState(false);
@@ -100,12 +111,6 @@ const ProfilePage = () => {
       newErrors.fullName = "Full name is required";
     }
 
-    if (!profileData.email) {
-      newErrors.email = "Email is required";
-    } else if (!/\S+@\S+\.\S+/.test(profileData.email)) {
-      newErrors.email = "Email is invalid";
-    }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -153,8 +158,13 @@ const ProfilePage = () => {
         setIsUploadingPicture(false);
       }
 
-      // Here you would also update other profile data (name, email)
-      // For now, we'll just simulate the API call
+      // Update profile data (full name)
+      if (profileData.fullName !== currentUser?.full_name) {
+        await authService.updateProfile({
+          full_name: profileData.fullName
+        });
+      }
+
       setSuccessMessage("Profile updated successfully!");
       
       // Force auth context to refresh user data if image was uploaded
@@ -162,6 +172,11 @@ const ProfilePage = () => {
         setTimeout(() => {
           window.location.reload();
         }, 1000);
+      } else {
+        // Reload to refresh user data from updated storage
+        setTimeout(() => {
+          window.location.reload();
+        }, 500);
       }
       
       // Reset file input
@@ -401,16 +416,13 @@ const ProfilePage = () => {
                       id="email"
                       name="email"
                       value={profileData.email}
-                      onChange={handleProfileChange}
-                      className={`w-full p-3 border rounded focus:outline-none focus:ring-2 focus:ring-primary ${
-                        errors.email ? "border-red-500" : "border-gray-300"
-                      }`}
+                      readOnly
+                      disabled
+                      className="w-full p-3 border rounded border-gray-300 bg-gray-100 text-gray-600 cursor-not-allowed"
                     />
-                    {errors.email && (
-                      <p className="text-red-500 text-sm mt-1">
-                        {errors.email}
-                      </p>
-                    )}
+                    <p className="text-gray-500 text-sm mt-1">
+                      Email address cannot be changed
+                    </p>
                   </div>
 
                   {/* Submit Button */}

@@ -381,6 +381,54 @@ const authService = {
       throw error;
     }
   },
+
+  /**
+   * Update user profile (full name)
+   * @param {Object} profileData - Profile data object
+   * @returns {Promise} - Promise that resolves to updated user data
+   */
+  updateProfile: async (profileData) => {
+    try {
+      const token = authService.getStorage("token");
+
+      if (!token) {
+        throw new Error("No authentication token found");
+      }
+
+      const response = await fetch(`${api.baseURL}/auth/profile`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(profileData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Failed to update profile");
+      }
+
+      const updatedUser = await response.json();
+      
+      // Update stored user data
+      const currentUser = authService.getStorage("user");
+      if (currentUser) {
+        const userData = JSON.parse(currentUser);
+        const updatedUserData = { ...userData, ...updatedUser };
+        authService.setStorage(
+          localStorage.getItem("token") ? true : false,
+          "user",
+          JSON.stringify(updatedUserData)
+        );
+      }
+
+      return updatedUser;
+    } catch (error) {
+      console.error("Update profile error:", error);
+      throw error;
+    }
+  },
 };
 
 export default authService;
