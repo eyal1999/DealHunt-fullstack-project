@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../api/index";
+import BackButton from "../components/common/BackButton";
 
 const ResetPasswordPage = () => {
   const [searchParams] = useSearchParams();
@@ -92,6 +93,11 @@ const ResetPasswordPage = () => {
 
   return (
     <div className="max-w-md mx-auto">
+      {/* Back Button */}
+      <div className="mb-4">
+        <BackButton />
+      </div>
+      
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold text-gray-800 mb-2">
           Reset Password

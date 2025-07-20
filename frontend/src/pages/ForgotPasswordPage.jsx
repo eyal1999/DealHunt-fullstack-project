@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/index";
+import BackButton from "../components/common/BackButton";
 // Note: Scroll reveal animations disabled as they were hiding content
 
 const ForgotPasswordPage = () => {
@@ -58,6 +59,11 @@ const ForgotPasswordPage = () => {
 
   return (
     <div className="max-w-md mx-auto mt-8 p-6 bg-white rounded-lg shadow-md min-h-96">
+      {/* Back Button */}
+      <div className="mb-4">
+        <BackButton />
+      </div>
+      
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold text-gray-800 mb-2">
           Forgot Password

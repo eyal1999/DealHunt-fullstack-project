@@ -121,7 +121,8 @@ async def get_existing_google_user(google_user: GoogleUserInfo) -> UserInDB:
             "google_id": google_user.id,
             "picture_url": google_user.picture,
             "auth_provider": "both",  # User can now login with email OR Google
-            "last_login": datetime.utcnow()
+            "last_login": datetime.utcnow(),
+            "email_verified": True  # Linking Google verifies the email
         }
         
         await users_collection.update_one(
@@ -130,7 +131,8 @@ async def get_existing_google_user(google_user: GoogleUserInfo) -> UserInDB:
                 "google_id": google_user.id,
                 "picture_url": google_user.picture,
                 "auth_provider": "both",
-                "last_login": datetime.utcnow()
+                "last_login": datetime.utcnow(),
+                "email_verified": True  # Linking Google verifies the email
             }}
         )
         
@@ -183,7 +185,8 @@ async def create_google_user(google_user: GoogleUserInfo) -> UserInDB:
         hashed_password=None,  # Google users don't have passwords
         is_active=True,
         created_at=datetime.utcnow(),
-        last_login=datetime.utcnow()
+        last_login=datetime.utcnow(),
+        email_verified=True  # Google accounts are pre-verified
     )
     
     # Insert new user into database
@@ -245,7 +248,8 @@ async def google_signin(token_request: GoogleTokenRequest) -> Any:
         auth_provider=user_in_db.auth_provider,
         is_active=user_in_db.is_active,
         created_at=user_in_db.created_at,
-        last_login=user_in_db.last_login
+        last_login=user_in_db.last_login,
+        email_verified=user_in_db.email_verified if hasattr(user_in_db, 'email_verified') else True  # Google users are verified
     )
     
     # Return token and user data
@@ -297,7 +301,8 @@ async def google_register(token_request: GoogleTokenRequest) -> Any:
         auth_provider=user_in_db.auth_provider,
         is_active=user_in_db.is_active,
         created_at=user_in_db.created_at,
-        last_login=user_in_db.last_login
+        last_login=user_in_db.last_login,
+        email_verified=user_in_db.email_verified if hasattr(user_in_db, 'email_verified') else True  # Google users are verified
     )
     
     # Return token and user data
@@ -367,7 +372,8 @@ async def link_google_account(
         {"$set": {
             "google_id": google_user.id,
             "picture_url": google_user.picture,
-            "auth_provider": "both"
+            "auth_provider": "both",
+            "email_verified": True  # Linking Google verifies the email
         }}
     )
     

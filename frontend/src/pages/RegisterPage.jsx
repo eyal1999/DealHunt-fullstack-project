@@ -1,12 +1,13 @@
 // frontend/src/pages/RegisterPage.jsx
 import React, { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import GoogleSignInButton from "../components/auth/GoogleSignInButton";
 import { initRegisterPageAnimations } from "../utils/scrollReveal";
 
 const RegisterPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const {
     register,
     googleRegister,
@@ -42,6 +43,80 @@ const RegisterPage = () => {
   useEffect(() => {
     initRegisterPageAnimations();
   }, []);
+
+  // Restore form data from navigation state or sessionStorage
+  useEffect(() => {
+    // First priority: restore from location state (when coming back from terms/privacy)
+    if (location.state?.formData) {
+      setFormData(location.state.formData);
+      // Clear the state to prevent it from persisting
+      window.history.replaceState({}, document.title);
+      // Also clear sessionStorage since we're restoring from navigation state
+      sessionStorage.removeItem('registrationFormData');
+    } else {
+      // Second priority: restore from sessionStorage (browser refresh protection)
+      const savedFormData = sessionStorage.getItem('registrationFormData');
+      if (savedFormData) {
+        try {
+          const parsedData = JSON.parse(savedFormData);
+          setFormData(parsedData);
+          // Clear sessionStorage after restoring to prevent it from persisting unnecessarily
+          sessionStorage.removeItem('registrationFormData');
+        } catch (error) {
+          console.warn('Failed to restore form data from sessionStorage:', error);
+          sessionStorage.removeItem('registrationFormData');
+        }
+      }
+    }
+  }, [location.state]);
+
+  // Clean up sessionStorage when component unmounts (unless navigating to legal pages)
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      // Only keep sessionStorage if we have form data and user might be refreshing
+      // Otherwise clean it up
+      const currentPath = window.location.pathname;
+      if (!currentPath.includes('/terms') && !currentPath.includes('/privacy')) {
+        // Clear sessionStorage if we're not navigating to legal pages
+        setTimeout(() => {
+          sessionStorage.removeItem('registrationFormData');
+        }, 100);
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      // Don't auto-clear on unmount since user might be navigating to legal pages
+    };
+  }, []);
+
+  // Only save form data to sessionStorage for browser refresh protection, not for every change
+  // This will be called manually when navigating to Terms/Privacy
+  const saveFormDataToSession = () => {
+    if (formData.fullName || formData.email || formData.password) {
+      sessionStorage.setItem('registrationFormData', JSON.stringify(formData));
+    }
+  };
+
+  // Clear saved form data when registration is successful
+  const clearSavedFormData = () => {
+    sessionStorage.removeItem('registrationFormData');
+  };
+
+  // Navigation handler for terms and privacy links
+  const handleLegalPageNavigation = (path) => {
+    // Save form data to sessionStorage only when navigating to legal pages
+    saveFormDataToSession();
+    
+    navigate(path, {
+      state: { 
+        formData: formData,
+        fromRegistration: true 
+      }
+    });
+  };
 
   // Handle input changes
   const handleChange = (e) => {
@@ -121,11 +196,13 @@ const RegisterPage = () => {
     setIsLoading(false);
 
     if (result.success) {
+      // Clear saved form data on successful registration
+      clearSavedFormData();
       // Redirect to login page with success message
       navigate("/login", {
         state: {
           message:
-            "Registration successful! Please sign in with your new account.",
+            "Registration successful! Please check your email for a verification link, then sign in with your new account.",
         },
       });
     }
@@ -145,6 +222,8 @@ const RegisterPage = () => {
 
     if (result.success) {
       console.log("✅ RegisterPage: Google Registration successful, redirecting...");
+      // Clear saved form data on successful registration
+      clearSavedFormData();
       // Redirect to home page after successful Google registration
       navigate("/", { replace: true });
     } else {
@@ -328,16 +407,21 @@ const RegisterPage = () => {
                 className="ml-2 block text-sm text-gray-900"
               >
                 I agree to the{" "}
-                <Link to="/terms" className="text-primary hover:text-blue-500">
+                <button
+                  type="button"
+                  onClick={() => handleLegalPageNavigation('/terms')}
+                  className="text-primary hover:text-blue-500 underline"
+                >
                   Terms and Conditions
-                </Link>{" "}
+                </button>{" "}
                 and{" "}
-                <Link
-                  to="/privacy"
-                  className="text-primary hover:text-blue-500"
+                <button
+                  type="button"
+                  onClick={() => handleLegalPageNavigation('/privacy')}
+                  className="text-primary hover:text-blue-500 underline"
                 >
                   Privacy Policy
-                </Link>
+                </button>
               </label>
             </div>
             {errors.acceptTerms && (

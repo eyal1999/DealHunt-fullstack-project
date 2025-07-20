@@ -1,10 +1,11 @@
 // frontend/src/pages/LoginPage.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import GoogleSignInButton from "../components/auth/GoogleSignInButton";
 import { useAutoWishlist } from "../hooks/useAutoWishlist";
 import { initLoginPageAnimations } from "../utils/scrollReveal";
+import authService from "../api/authService";
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -25,10 +26,12 @@ const LoginPage = () => {
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [showVerificationWarning, setShowVerificationWarning] = useState(false);
+  const emailForResend = useRef("");
 
   // Get the redirect information from location state
   const from = location.state?.from || "/";
-  const redirectMessage = location.state?.message;
+  const [redirectMessage, setRedirectMessage] = useState(location.state?.message);
   const redirectAction = location.state?.action;
   const productTitle = location.state?.productTitle;
 
@@ -42,10 +45,19 @@ const LoginPage = () => {
     }
   }, [isAuthenticated, navigate, from]);
 
-  // Clear errors when component mounts or when starting new action
+  // Clear errors only when component mounts
   useEffect(() => {
     clearError();
-  }, [clearError]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Remove clearError from dependencies to prevent clearing on every render
+  
+  // Clear registration message when verification error appears
+  useEffect(() => {
+    if (authError && authError.includes("Email verification required")) {
+      setRedirectMessage(null);
+      setShowVerificationWarning(true);
+    }
+  }, [authError]);
 
   // Initialize login page animations
   useEffect(() => {
@@ -96,15 +108,22 @@ const LoginPage = () => {
     }
 
     setIsLoading(true);
+    setShowVerificationWarning(false);
     clearError();
 
+    // Store email for potential resend (survives component re-mounting)
+    sessionStorage.setItem('loginEmail', formData.email);
+    emailForResend.current = formData.email;
+    
     const result = await login(formData.email, formData.password, formData.rememberMe);
 
     setIsLoading(false);
 
     if (result.success) {
-      // Redirect to intended page or home
       navigate(from, { replace: true });
+    } else if (result.isVerificationRequired) {
+      setShowVerificationWarning(true);
+      setRedirectMessage(null);
     }
     // Error handling is done through the auth context
   };
@@ -134,6 +153,7 @@ const LoginPage = () => {
     setIsGoogleLoading(false);
     // The error will be shown through the auth context
   };
+
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -195,9 +215,49 @@ const LoginPage = () => {
           </div>
 
           {/* Error Display */}
-          {authError && (
+          {authError && !authError.includes("Email verification required") && (
             <div className="login-error bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
               {authError}
+            </div>
+          )}
+          
+          {/* Email Verification Required */}
+          {showVerificationWarning && (
+            <div className="verification-required bg-yellow-50 border border-yellow-400 p-4 rounded-lg">
+              <div className="flex items-start">
+                <svg className="w-5 h-5 text-yellow-400 mr-2 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                <div className="flex-1">
+                  <h3 className="text-sm font-medium text-yellow-800">Email Verification Required</h3>
+                  <p className="text-sm text-yellow-700 mt-1">
+                    Please verify your email address before logging in. Check your inbox for the verification link.
+                  </p>
+                  <p className="text-sm text-yellow-700 mt-2">
+                    Didn't receive the email? Check your spam folder or click below to resend.
+                  </p>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const emailToUse = emailForResend.current || formData.email || sessionStorage.getItem('loginEmail');
+                        
+                        if (!emailToUse) {
+                          alert('No email address available. Please try logging in again.');
+                          return;
+                        }
+                        
+                        const response = await authService.resendVerificationEmail(emailToUse);
+                        alert(response.message || 'Verification email sent!');
+                      } catch (error) {
+                        alert(error.message || 'Failed to resend verification email');
+                      }
+                    }}
+                    className="mt-3 bg-yellow-100 hover:bg-yellow-200 text-yellow-800 text-sm font-medium px-4 py-2 rounded border border-yellow-300 transition-colors"
+                  >
+                    Resend Verification Email
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 

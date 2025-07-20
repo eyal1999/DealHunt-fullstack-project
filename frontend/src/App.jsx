@@ -5,6 +5,7 @@ import MainLayout from "./layouts/MainLayout";
 import HomePage from "./pages/HomePage";
 import SearchResultsPage from "./pages/SearchResultsPage";
 import ProductDetailPage from "./pages/ProductDetailPage";
+import CategoriesPage from "./pages/CategoriesPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import ProfilePage from "./pages/ProfilePage";
@@ -13,6 +14,7 @@ import TermsPage from "./pages/TermsPage";
 import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
+import EmailVerificationPage from "./pages/EmailVerificationPage";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import ErrorBoundary from "./components/common/ErrorBoundary";
 import { useEffect } from "react";
@@ -49,6 +51,7 @@ const AppContent = () => {
           {/* Public routes */}
           <Route index element={<HomePage />} />
           <Route path="search" element={<SearchResultsPage />} />
+          <Route path="categories" element={<CategoriesPage />} />
           <Route
             path="product/:marketplace/:id"
             element={
@@ -66,6 +69,7 @@ const AppContent = () => {
             element={<ForgotPasswordPage />}
           />
           <Route path="reset-password" element={<ResetPasswordPage />} />
+          <Route path="verify-email" element={<EmailVerificationPage />} />
           {/* Protected routes */}
           <Route element={<ProtectedRoute />}>
             <Route path="profile" element={<ProfilePage />} />

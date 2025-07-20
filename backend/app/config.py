@@ -40,6 +40,12 @@ class Settings(BaseSettings):
     # ── Google OAuth settings ──────────────────────────────────────
     google_client_id: str = Field(..., validation_alias="GOOGLE_CLIENT_ID")
     google_client_secret: str = Field(..., validation_alias="GOOGLE_CLIENT_SECRET")
+    
+    # ── Email settings ──────────────────────────────────────────
+    mail_username: str = Field(..., validation_alias="MAIL_USERNAME")
+    mail_password: str = Field(..., validation_alias="MAIL_PASSWORD")
+    mail_from: str = Field(..., validation_alias="MAIL_FROM")
+    frontend_url: str = Field("http://localhost:3000", validation_alias="FRONTEND_URL")
 
     model_config = SettingsConfigDict(
         env_file=[

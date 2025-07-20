@@ -17,8 +17,19 @@ from app.db import users_collection, password_reset_collection
 from app.models.db_models import Token, User, UserCreate, UserInDB, NotificationPreferences
 from app.models.password_reset import PasswordResetRequest, PasswordResetConfirm, PasswordResetToken
 from app.services.email_service import email_service
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+class EmailVerificationRequest(BaseModel):
+    email: str
+
+class EmailVerificationConfirm(BaseModel):
+    token: str
 
 @router.post("/register", response_model=User)
 async def register(user_data: UserCreate) -> Any:
@@ -46,11 +57,27 @@ async def register(user_data: UserCreate) -> Any:
         auth_provider="email"  # Explicitly set for email registration
     )
     
+    # Generate verification token for new user
+    verification_token = secrets.token_urlsafe(32)
+    expires_at = datetime.utcnow() + timedelta(hours=24)
+    
+    # Update user_db with verification token
+    user_db.verification_token = verification_token
+    user_db.verification_token_expires = expires_at
+    user_db.verification_sent_at = datetime.utcnow()
+    
     # Insert user into database
     result = await users_collection.insert_one(user_db.model_dump(by_alias=True))
     
     # Get newly created user
     created_user = await users_collection.find_one({"_id": result.inserted_id})
+    
+    # Send verification email
+    try:
+        await email_service.send_verification_email(user_data.email, verification_token)
+    except Exception as e:
+        print(f"Failed to send verification email: {e}")
+        # In development, continue anyway
     
     # Return user data (without hashed password)
     return User(
@@ -61,7 +88,8 @@ async def register(user_data: UserCreate) -> Any:
         auth_provider=created_user.get("auth_provider", "email"),
         created_at=created_user["created_at"],
         is_active=created_user["is_active"],
-        last_login=created_user.get("last_login")
+        last_login=created_user.get("last_login"),
+        email_verified=created_user.get("email_verified", False)
     )
 
 @router.post("/login", response_model=Token)
@@ -87,6 +115,13 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()) -> Any:
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    # Check if email is verified for email-based accounts
+    if user_obj.auth_provider == "email" and not user_obj.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Email verification required. Please check your email and verify your account before logging in.",
+        )
+    
     # Create access token
     access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
     access_token = await create_access_token(
@@ -102,7 +137,8 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()) -> Any:
         auth_provider=user_obj.auth_provider,
         created_at=user_obj.created_at,
         is_active=user_obj.is_active,
-        last_login=user_obj.last_login
+        last_login=user_obj.last_login,
+        email_verified=user_obj.email_verified
     )
     
     # Return token and user info
@@ -265,6 +301,48 @@ async def reset_password(request: PasswordResetConfirm):
     
     return {"message": "Password reset successfully"}
 
+@router.post("/change-password")
+async def change_password(
+    request: PasswordChangeRequest,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Change password for authenticated user.
+    """
+    # Get user from database to access hashed password
+    user_db = await users_collection.find_one({"_id": ObjectId(current_user.id)})
+    
+    if not user_db:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    # Check if user has a password (Google-only users cannot change password)
+    if not user_db.get("hashed_password"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This account uses Google sign-in and doesn't have a password to change"
+        )
+    
+    # Verify current password
+    if not verify_password(request.current_password, user_db["hashed_password"]):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect"
+        )
+    
+    # Hash new password
+    new_hashed_password = get_password_hash(request.new_password)
+    
+    # Update password in database
+    await users_collection.update_one(
+        {"_id": ObjectId(current_user.id)},
+        {"$set": {"hashed_password": new_hashed_password}}
+    )
+    
+    return {"message": "Password changed successfully"}
+
 @router.put("/notification-preferences")
 async def update_notification_preferences(
     preferences: NotificationPreferences,
@@ -349,6 +427,129 @@ async def update_profile(
         "is_active": updated_user.get("is_active", True),
         "created_at": updated_user.get("created_at"),
         "last_login": updated_user.get("last_login"),
+        "email_verified": updated_user.get("email_verified", False),
         "email_notifications": updated_user.get("email_notifications", True),
         "price_drop_notifications": updated_user.get("price_drop_notifications", True)
     }
+
+@router.post("/send-verification-email")
+async def send_verification_email(request: EmailVerificationRequest):
+    """
+    Send email verification link to user.
+    """
+    # Check if user exists
+    user = await users_collection.find_one({"email": request.email})
+    
+    if not user:
+        # Always return success to prevent email enumeration attacks
+        return {"message": "If an account with that email exists, we've sent a verification email."}
+    
+    # Check if user is already verified
+    if user.get("email_verified", False):
+        return {"message": "Email is already verified."}
+    
+    # Generate secure verification token
+    verification_token = secrets.token_urlsafe(32)
+    
+    # Set token expiry (24 hours)
+    expires_at = datetime.utcnow() + timedelta(hours=24)
+    
+    # Update user with verification token
+    await users_collection.update_one(
+        {"_id": user["_id"]},
+        {
+            "$set": {
+                "verification_token": verification_token,
+                "verification_token_expires": expires_at,
+                "verification_sent_at": datetime.utcnow()
+            }
+        }
+    )
+    
+    # Send verification email
+    try:
+        await email_service.send_verification_email(request.email, verification_token)
+    except Exception as e:
+        print(f"Failed to send verification email: {e}")
+        # In development, continue anyway
+    
+    return {"message": "If an account with that email exists, we've sent a verification email."}
+
+@router.post("/verify-email")
+async def verify_email(request: EmailVerificationConfirm):
+    """
+    Verify user's email address with token.
+    """
+    # Find user with matching token that hasn't expired
+    user = await users_collection.find_one({
+        "verification_token": request.token,
+        "verification_token_expires": {"$gt": datetime.utcnow()}
+    })
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired verification token"
+        )
+    
+    # Update user as verified and clear token
+    await users_collection.update_one(
+        {"_id": user["_id"]},
+        {
+            "$set": {
+                "email_verified": True,
+                "verification_token": None,
+                "verification_token_expires": None
+            }
+        }
+    )
+    
+    return {"message": "Email verified successfully! You can now use all features."}
+
+@router.post("/resend-verification-email")
+async def resend_verification_email(request: EmailVerificationRequest):
+    """
+    Resend email verification link to user.
+    """
+    # Check if user exists
+    user = await users_collection.find_one({"email": request.email})
+    
+    if not user:
+        # Always return success to prevent email enumeration attacks
+        return {"message": "If an account with that email exists and is not verified, we've sent a verification email."}
+    
+    # Check if user is already verified
+    if user.get("email_verified", False):
+        return {"message": "Email is already verified."}
+    
+    # Check if user recently received a verification email (rate limiting)
+    last_sent = user.get("verification_sent_at")
+    if last_sent and datetime.utcnow() - last_sent < timedelta(minutes=5):
+        return {"message": "Please wait 5 minutes before requesting another verification email."}
+    
+    # Generate new verification token
+    verification_token = secrets.token_urlsafe(32)
+    
+    # Set token expiry (24 hours)
+    expires_at = datetime.utcnow() + timedelta(hours=24)
+    
+    # Update user with new verification token
+    await users_collection.update_one(
+        {"_id": user["_id"]},
+        {
+            "$set": {
+                "verification_token": verification_token,
+                "verification_token_expires": expires_at,
+                "verification_sent_at": datetime.utcnow()
+            }
+        }
+    )
+    
+    # Send verification email
+    try:
+        await email_service.send_verification_email(request.email, verification_token)
+    except Exception as e:
+        print(f"Failed to send verification email: {e}")
+        # In development, continue anyway
+    
+    return {"message": "If an account with that email exists and is not verified, we've sent a verification email."}

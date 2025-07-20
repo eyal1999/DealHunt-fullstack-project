@@ -1,13 +1,24 @@
 import { Outlet } from "react-router-dom";
 import Navbar from "../components/layout/Navbar";
+import EmailVerificationBanner from "../components/common/EmailVerificationBanner";
+import { useAuth } from "../contexts/AuthContext";
 
 const MainLayout = () => {
+  const { user } = useAuth();
+
   return (
     <div className="flex flex-col min-h-screen">
       {/* Navbar */}
       <div className="navbar">
         <Navbar />
       </div>
+
+      {/* Email verification banner */}
+      {user && (
+        <div className="container mx-auto px-4 pt-4">
+          <EmailVerificationBanner user={user} />
+        </div>
+      )}
 
       {/* Main content */}
       <main className="flex-grow container mx-auto px-4 py-8">

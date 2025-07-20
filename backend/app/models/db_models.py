@@ -62,6 +62,12 @@ class UserInDB(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     last_login: Optional[datetime] = None
     
+    # Email verification fields
+    email_verified: bool = False
+    verification_token: Optional[str] = None
+    verification_token_expires: Optional[datetime] = None
+    verification_sent_at: Optional[datetime] = None
+    
     # Email notification preferences
     email_notifications: bool = True
     price_drop_notifications: bool = True
@@ -80,6 +86,7 @@ class User(BaseModel):
     is_active: bool
     created_at: datetime
     last_login: Optional[datetime] = None
+    email_verified: bool = False
     email_notifications: bool = True
     price_drop_notifications: bool = True
 

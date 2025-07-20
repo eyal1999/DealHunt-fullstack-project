@@ -10,10 +10,13 @@ import { productService } from "../api/apiServices";
 import { useAuth } from "../contexts/AuthContext";
 import { useWishlist } from "../contexts/WishlistContext";
 import { useAutoWishlist } from "../hooks/useAutoWishlist";
+import { useRecentlyViewed } from "../hooks/useRecentlyViewed";
 import { getImageUrl, getFallbackImageUrl } from "../utils/simpleImageProxy";
 import { initProductPageAnimations, cleanupAnimations } from "../utils/scrollReveal";
 import ProductRecommendations from "../components/recommendations/ProductRecommendations";
 import ProductDetailSkeleton from "../components/loading/ProductDetailSkeleton";
+import BackButton from "../components/common/BackButton";
+import ImageModal from "../components/product/ImageModal";
 
 // Simple Image Component for Product Details
 const ProductImage = React.forwardRef(({
@@ -197,6 +200,7 @@ const ProductImageSection = ({
   setActiveImage,
   showVideo,
   setShowVideo,
+  onImageClick,
 }) => {
   // Memoize image processing to avoid recalculating on every render
   const processedImages = useMemo(() => {
@@ -285,10 +289,32 @@ const ProductImageSection = ({
         ) : (
           <div className="w-full h-96 bg-gray-100 rounded-lg overflow-hidden">
             {processedImages.length > 0 ? (
-              <SimpleProductImage
-                src={processedImages[Math.min(activeImage, processedImages.length - 1)] || processedImages[0]}
-                alt={product?.title || 'Product image'}
-              />
+              <button
+                onClick={() => onImageClick && onImageClick(activeImage)}
+                className="w-full h-full relative group cursor-zoom-in focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded-lg"
+                title="Click to open image gallery"
+              >
+                <SimpleProductImage
+                  src={processedImages[Math.min(activeImage, processedImages.length - 1)] || processedImages[0]}
+                  alt={product?.title || 'Product image'}
+                />
+                
+                {/* Overlay with zoom icon on hover */}
+                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 flex items-center justify-center">
+                  <div className="bg-white bg-opacity-0 group-hover:bg-opacity-90 rounded-full p-3 transform scale-0 group-hover:scale-100 transition-all duration-200">
+                    <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
+                    </svg>
+                  </div>
+                </div>
+                
+                {/* Image indicator if multiple images */}
+                {processedImages.length > 1 && (
+                  <div className="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-xs">
+                    {activeImage + 1} / {processedImages.length}
+                  </div>
+                )}
+              </button>
             ) : (
               <div className="w-full h-full flex items-center justify-center text-gray-500">
                 <div className="text-center">
@@ -337,6 +363,9 @@ const ProductDetailPage = () => {
 
   // Enable auto-wishlist functionality
   useAutoWishlist();
+  
+  // Track recently viewed products
+  const { addProduct: addToRecentlyViewed } = useRecentlyViewed();
 
   // Get marketplace logo component (same as ProductCard)
   const getMarketplaceLogo = (marketplace) => {
@@ -420,6 +449,7 @@ const ProductDetailPage = () => {
   const [showVideo, setShowVideo] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [isAutoRetrying, setIsAutoRetrying] = useState(false);
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
 
   // Wishlist state
   const [isAddingToWishlist, setIsAddingToWishlist] = useState(false);
@@ -503,9 +533,21 @@ const ProductDetailPage = () => {
       setError(null);
       setRetryCount(0);
       setIsAutoRetrying(false);
+      
+      // Scroll to top when navigating to product detail page
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      
       fetchProductDetail();
     }
   }, [fetchProductDetail]);
+  
+  // Track product view when product is successfully loaded
+  useEffect(() => {
+    if (product && !error && !isLoading) {
+      // Add to recently viewed products
+      addToRecentlyViewed(product);
+    }
+  }, [product, error, isLoading, addToRecentlyViewed]);
 
   // Clear wishlist message after a delay
   useEffect(() => {
@@ -721,6 +763,44 @@ const ProductDetailPage = () => {
     setIsLoading(true);
     fetchProductDetail();
   }, [fetchProductDetail]);
+
+  // Image modal handlers
+  const handleImageClick = useCallback((imageIndex) => {
+    setActiveImage(imageIndex);
+    setIsImageModalOpen(true);
+  }, []);
+
+  const handleCloseImageModal = useCallback(() => {
+    setIsImageModalOpen(false);
+  }, []);
+
+  // Memoize processed images for modal
+  const processedImages = useMemo(() => {
+    const images = [];
+
+    // Safety check: ensure product exists
+    if (!product) return images;
+
+    try {
+      // Add main image first
+      if (product.main_image && typeof product.main_image === 'string') {
+        images.push(product.main_image);
+      }
+
+      // Add additional images, avoiding duplicates
+      if (product.images && Array.isArray(product.images)) {
+        product.images.forEach((img) => {
+          if (img && typeof img === 'string' && !images.includes(img)) {
+            images.push(img);
+          }
+        });
+      }
+    } catch (error) {
+      console.warn('Error processing product images:', error);
+    }
+
+    return images;
+  }, [product?.main_image, product?.images]);
 
   // Format price with currency
   const formatPrice = useCallback((price) => {
@@ -1191,6 +1271,11 @@ const ProductDetailPage = () => {
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
       <div style={{ opacity: 1, visibility: 'visible', transform: 'none' }}>
+      {/* Back Button */}
+      <div className="mb-4">
+        <BackButton />
+      </div>
+      
       {/* Enhanced Breadcrumbs */}
       <div className="product-breadcrumbs text-sm text-gray-500 mb-6">
         {formatBreadcrumbs(product).map((crumb, index) => (
@@ -1231,6 +1316,7 @@ const ProductDetailPage = () => {
             setActiveImage={setActiveImage}
             showVideo={showVideo}
             setShowVideo={setShowVideo}
+            onImageClick={handleImageClick}
           />
         </div>
 
@@ -1433,6 +1519,15 @@ const ProductDetailPage = () => {
         />
       </div>
       </div>
+
+      {/* Image Modal */}
+      <ImageModal
+        images={processedImages}
+        initialIndex={activeImage}
+        isOpen={isImageModalOpen}
+        onClose={handleCloseImageModal}
+        productTitle={product?.title || 'Product'}
+      />
     </div>
   );
 };

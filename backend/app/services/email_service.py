@@ -1,16 +1,12 @@
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 from typing import List
-import os
-from dotenv import load_dotenv
+from app.config import settings
 
-# Load environment variables
-load_dotenv()
-
-# Email configuration
+# Email configuration using settings
 conf = ConnectionConfig(
-    MAIL_USERNAME=os.getenv("MAIL_USERNAME", "your-email@gmail.com"),
-    MAIL_PASSWORD=os.getenv("MAIL_PASSWORD", "your-app-password"),
-    MAIL_FROM=os.getenv("MAIL_FROM", "your-email@gmail.com"),
+    MAIL_USERNAME=settings.mail_username,
+    MAIL_PASSWORD=settings.mail_password,
+    MAIL_FROM=settings.mail_from,
     MAIL_PORT=587,
     MAIL_SERVER="smtp.gmail.com",
     MAIL_STARTTLS=True,
@@ -32,11 +28,9 @@ class EmailService:
             reset_token: The password reset token
             frontend_url: Frontend base URL for reset link
         """
-        # Use environment variable if frontend_url not provided
+        # Use settings if frontend_url not provided
         if frontend_url is None:
-            # Reload environment variables to get latest values
-            load_dotenv()
-            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+            frontend_url = settings.frontend_url
         
         reset_link = f"{frontend_url}/reset-password?token={reset_token}"
         
@@ -132,7 +126,7 @@ This is an automated email. Please do not reply to this message.
             body=html_content,
             subtype="html",
             alternative_body=text_content,
-            reply_to=conf.MAIL_FROM,
+            reply_to=[conf.MAIL_FROM],
             headers={"X-Priority": "1", "X-MSMail-Priority": "High", "Importance": "High"}
         )
         
@@ -144,6 +138,127 @@ This is an automated email. Please do not reply to this message.
             # For development, we'll simulate email sending
             print(f"📧 SIMULATED EMAIL TO: {email}")
             print(f"🔗 Reset Link: {reset_link}")
+            return True  # Return True for development to continue the flow
+
+    async def send_verification_email(self, email: str, verification_token: str, frontend_url: str = None):
+        """
+        Send email verification email to user.
+        
+        Args:
+            email: User's email address
+            verification_token: The email verification token
+            frontend_url: Frontend base URL for verification link
+        """
+        # Use settings if frontend_url not provided
+        if frontend_url is None:
+            frontend_url = settings.frontend_url
+        
+        verification_link = f"{frontend_url}/verify-email?token={verification_token}"
+        
+        # Email-client compatible HTML using tables
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Verify Your Email - DealHunt</title>
+        </head>
+        <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f4; padding: 20px;">
+                <tr>
+                    <td align="center">
+                        <table width="600" cellpadding="0" cellspacing="0" style="background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                            <!-- Header -->
+                            <tr>
+                                <td style="background-color: #10b981; color: white; padding: 30px; text-align: center;">
+                                    <h1 style="margin: 0; font-size: 24px;">✉️ Verify Your Email</h1>
+                                </td>
+                            </tr>
+                            
+                            <!-- Content -->
+                            <tr>
+                                <td style="padding: 40px 30px;">
+                                    <p style="margin: 0 0 20px 0; font-size: 16px; line-height: 1.6; color: #333;">Welcome to DealHunt!</p>
+                                    
+                                    <p style="margin: 0 0 20px 0; font-size: 16px; line-height: 1.6; color: #333;">Thank you for creating an account with us. To complete your registration and start using all features, please verify your email address.</p>
+                                    
+                                    <p style="margin: 0 0 30px 0; font-size: 16px; line-height: 1.6; color: #333;">Click the button below to verify your email:</p>
+                                    
+                                    <!-- Button -->
+                                    <table width="100%" cellpadding="0" cellspacing="0">
+                                        <tr>
+                                            <td align="center" style="padding: 20px 0;">
+                                                <a href="{verification_link}" style="display: inline-block; background-color: #10b981; color: white; padding: 15px 30px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">Verify My Email</a>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                    
+                                    <p style="margin: 30px 0 20px 0; font-size: 16px; line-height: 1.6; color: #333;">Or copy and paste this link into your browser:</p>
+                                    <p style="margin: 0 0 30px 0; word-break: break-all; background-color: #f8f9fa; padding: 15px; border-radius: 4px; font-size: 14px; color: #666; border: 1px solid #e9ecef;">{verification_link}</p>
+                                    
+                                    <p style="margin: 0 0 20px 0; font-size: 16px; line-height: 1.6; color: #d63384;"><strong>Important:</strong> This link will expire in 24 hours for security reasons.</p>
+                                    
+                                    <p style="margin: 0 0 30px 0; font-size: 16px; line-height: 1.6; color: #333;">If you didn't create an account with DealHunt, you can safely ignore this email.</p>
+                                </td>
+                            </tr>
+                            
+                            <!-- Footer -->
+                            <tr>
+                                <td style="background-color: #f8f9fa; padding: 30px; text-align: center; border-top: 1px solid #e9ecef;">
+                                    <p style="margin: 0 0 10px 0; font-size: 16px; color: #333;"><strong>Welcome to DealHunt!<br>Happy Shopping!</strong></p>
+                                    <p style="margin: 0; font-size: 12px; color: #6c757d;">This is an automated email. Please do not reply to this message.</p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </body>
+        </html>
+        """
+        
+        # Plain text version for better compatibility
+        text_content = f"""
+Email Verification - DealHunt
+
+Welcome to DealHunt!
+
+Thank you for creating an account with us. To complete your registration and start using all features, please verify your email address.
+
+To verify your email, please click the following link or copy and paste it into your browser:
+
+{verification_link}
+
+IMPORTANT: This link will expire in 24 hours for security reasons.
+
+If you didn't create an account with DealHunt, you can safely ignore this email.
+
+Welcome to DealHunt!
+Happy Shopping!
+
+---
+This is an automated email. Please do not reply to this message.
+        """
+
+        message = MessageSchema(
+            subject="Welcome to DealHunt - Please Verify Your Email",
+            recipients=[email],
+            body=html_content,
+            subtype="html",
+            alternative_body=text_content,
+            reply_to=[conf.MAIL_FROM],
+            headers={"X-Priority": "1", "X-MSMail-Priority": "High", "Importance": "High"}
+        )
+        
+        try:
+            await self.fastmail.send_message(message)
+            return True
+        except Exception as e:
+            print(f"Failed to send email: {e}")
+            # For development, we'll simulate email sending
+            print(f"📧 SIMULATED VERIFICATION EMAIL TO: {email}")
+            print(f"🔗 Verification Link: {verification_link}")
             return True  # Return True for development to continue the flow
 
     async def send_price_drop_notification(self, email: str, items: list, frontend_url: str = "http://localhost:3000"):
@@ -193,7 +308,7 @@ This is an automated email. Please do not reply to this message.
             recipients=[email],
             body=html_content,
             subtype="html",
-            reply_to=conf.MAIL_FROM,
+            reply_to=[conf.MAIL_FROM],
             headers={"X-Priority": "1", "X-MSMail-Priority": "High", "Importance": "High"}
         )
         

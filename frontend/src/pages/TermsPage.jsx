@@ -1,7 +1,41 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 
 const TermsPage = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  // Check if user came from registration page
+  const fromRegistration = location.state?.fromRegistration;
+  const savedFormData = location.state?.formData;
+
+  // Handle back navigation
+  const handleBackNavigation = () => {
+    if (fromRegistration && savedFormData) {
+      // Go back to registration with preserved form data
+      navigate('/register', {
+        state: { formData: savedFormData }
+      });
+    } else {
+      // Default to home page
+      navigate('/');
+    }
+  };
+
+  // Handle navigation to privacy policy with state preservation
+  const handlePrivacyNavigation = () => {
+    if (fromRegistration && savedFormData) {
+      navigate('/privacy', {
+        state: { 
+          formData: savedFormData,
+          fromRegistration: true 
+        }
+      });
+    } else {
+      navigate('/privacy');
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto">
       <h1 className="text-3xl font-bold mb-6">Terms and Conditions</h1>
@@ -46,9 +80,12 @@ const TermsPage = () => {
           <p className="mb-4">
             Your use of DealHunt is also governed by our Privacy Policy, which
             can be found{" "}
-            <Link to="/privacy" className="text-primary hover:underline">
+            <button 
+              onClick={handlePrivacyNavigation}
+              className="text-primary hover:underline"
+            >
               here
-            </Link>
+            </button>
             .
           </p>
 
@@ -116,13 +153,22 @@ const TermsPage = () => {
           </p>
         </div>
 
-        <div className="mt-8 flex justify-center">
-          <Link
-            to="/"
-            className="bg-primary text-white px-6 py-2 rounded hover:bg-blue-700"
+        <div className="mt-8 flex justify-center space-x-4">
+          <button
+            onClick={handleBackNavigation}
+            className="bg-primary text-white px-6 py-2 rounded hover:bg-blue-700 transition-colors"
           >
-            Back to Home
-          </Link>
+            {fromRegistration ? 'Back to Registration' : 'Back to Home'}
+          </button>
+          
+          {fromRegistration && (
+            <button
+              onClick={handlePrivacyNavigation}
+              className="bg-gray-500 text-white px-6 py-2 rounded hover:bg-gray-600 transition-colors"
+            >
+              View Privacy Policy
+            </button>
+          )}
         </div>
       </div>
     </div>

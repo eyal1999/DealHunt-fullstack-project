@@ -54,13 +54,27 @@ export const AuthProvider = ({ children }) => {
       setError(null);
       setLoading(true);
 
+      console.log("🔵 AuthContext - Login attempt for:", email);
       const data = await authService.login(email, password, rememberMe);
 
       setCurrentUser(data.user);
       return { success: true };
     } catch (err) {
+      console.log("❌ AuthContext - Login error caught:", err);
+      console.log("  - Error message:", err.message);
+      console.log("  - Is verification required?", err.isVerificationRequired);
+      
       setError(err.message || "Login failed");
-      return { success: false, error: err.message };
+      
+      // Pass verification required information if available
+      const errorResult = { 
+        success: false, 
+        error: err.message,
+        isVerificationRequired: err.isVerificationRequired || false,
+        email: err.email
+      };
+      
+      return errorResult;
     } finally {
       setLoading(false);
     }
@@ -179,6 +193,8 @@ export const AuthProvider = ({ children }) => {
 
   // Clear error function
   const clearError = () => {
+    console.log("🧹 AuthContext - clearError called, current error:", error);
+    console.trace("clearError call stack");
     setError(null);
   };
 

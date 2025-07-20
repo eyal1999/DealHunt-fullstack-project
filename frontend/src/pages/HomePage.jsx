@@ -4,6 +4,7 @@ import ProductCard from "../components/product/ProductCard";
 import productService from "../api/productService";
 import { initHomePageAnimations } from "../utils/scrollReveal";
 import SearchDropdown from "../components/search/SearchDropdown";
+import RecentlyViewedSection from "../components/home/RecentlyViewedSection";
 
 const HomePage = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -21,6 +22,7 @@ const HomePage = () => {
     const fetchFeaturedProducts = async () => {
       try {
         setError(null);
+        setFeaturedProducts([]); // Clear products to show loading skeleton
         
         const response = await productService.getFeaturedProducts(6, 1, selectedMarketplace);
         setFeaturedProducts(response.products);
@@ -113,9 +115,9 @@ const HomePage = () => {
   // Handle marketplace filter change
   const handleMarketplaceChange = (marketplace) => {
     if (marketplace !== selectedMarketplace) {
+      setIsLoading(true);
       setSelectedMarketplace(marketplace);
       setCurrentPage(1);
-      setFeaturedProducts([]);
       setError(null);
     }
   };
@@ -162,7 +164,20 @@ const HomePage = () => {
             )
           )}
         </div>
+        
+        {/* Explore All Categories Button */}
+        <div className="text-center mt-6">
+          <button 
+            onClick={() => navigate('/categories')}
+            className="bg-primary text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors duration-200 shadow-sm hover:shadow-md"
+          >
+            Explore All Categories
+          </button>
+        </div>
       </section>
+
+      {/* Recently Viewed Section */}
+      <RecentlyViewedSection />
 
       {/* Featured Hot Deals */}
       <section className="featured-section">
@@ -181,21 +196,38 @@ const HomePage = () => {
               <div className="flex bg-gray-100 rounded-lg p-1">
                 {[
                   { value: 'mixed', label: '🌍 Mixed', desc: 'Best from both' },
-                  { value: 'aliexpress', label: '🔥 AliExpress', desc: 'Hot products' },
-                  { value: 'ebay', label: '⭐ eBay', desc: 'Trending items' }
+                  { value: 'aliexpress', label: 'AliExpress', desc: 'Hot products' },
+                  { value: 'ebay', label: 'eBay', desc: 'Trending items' }
                 ].map((option) => (
                   <button
                     key={option.value}
                     onClick={() => handleMarketplaceChange(option.value)}
                     disabled={isLoading}
-                    className={`px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                    className={`px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 group ${
                       selectedMarketplace === option.value
-                        ? 'bg-white text-primary shadow-sm'
-                        : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                        ? 'bg-white shadow-sm'
+                        : 'hover:bg-gray-50'
                     } disabled:opacity-50`}
                     title={option.desc}
                   >
-                    {option.label}
+                    {option.value === 'mixed' ? (
+                      <span className={selectedMarketplace === option.value ? 'text-primary' : 'text-gray-600'}>
+                        {option.label}
+                      </span>
+                    ) : option.value === 'aliexpress' ? (
+                      <span className={`font-bold text-orange-500 ${selectedMarketplace === option.value ? 'opacity-100' : 'opacity-60 group-hover:opacity-100'}`}>
+                        {option.label}
+                      </span>
+                    ) : option.value === 'ebay' ? (
+                      <span className={`font-bold ${selectedMarketplace === option.value ? 'opacity-100' : 'opacity-60 group-hover:opacity-100'}`}>
+                        <span className="text-blue-600">e</span>
+                        <span className="text-red-500">b</span>
+                        <span className="text-yellow-500">a</span>
+                        <span className="text-green-500">y</span>
+                      </span>
+                    ) : (
+                      option.label
+                    )}
                   </button>
                 ))}
               </div>

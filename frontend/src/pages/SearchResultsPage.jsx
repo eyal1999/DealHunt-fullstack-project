@@ -7,6 +7,7 @@ import SearchResultsSkeleton, { ProductCardSkeleton, ProductGridSkeleton } from 
 import { productService } from "../api/apiServices";
 import { useInfiniteScroll } from "../hooks/useInfiniteScroll";
 import { initSearchPageAnimations } from "../utils/scrollReveal";
+import BackButton from "../components/common/BackButton";
 
 /**
  * SearchResultsPage Component with Infinite Scrolling and Full Filters
@@ -803,6 +804,11 @@ const SearchResultsPage = () => {
 
   return (
     <div>
+      {/* Back Button */}
+      <div className="mb-4">
+        <BackButton />
+      </div>
+      
       {/* Search Results Header */}
       <div className="search-results-header mb-6">
         <h1 className="text-2xl font-bold mb-2">

@@ -63,6 +63,21 @@ const authService = {
 
       if (!response.ok) {
         const errorData = await response.json();
+        console.log("🚫 authService - Login failed:", {
+          status: response.status,
+          errorData: errorData,
+          detail: errorData.detail
+        });
+        
+        // Special handling for email verification required
+        if (response.status === 403 && errorData.detail?.includes("Email verification required")) {
+          console.log("📧 authService - Email verification required detected");
+          const verificationError = new Error(errorData.detail);
+          verificationError.isVerificationRequired = true;
+          verificationError.email = email;
+          throw verificationError;
+        }
+        
         throw new Error(errorData.detail || "Login failed");
       }
 
@@ -383,6 +398,43 @@ const authService = {
   },
 
   /**
+   * Change user password
+   * @param {Object} passwordData - Password change data
+   * @returns {Promise} - Promise that resolves to success message
+   */
+  changePassword: async (passwordData) => {
+    try {
+      const token = authService.getStorage("token");
+
+      if (!token) {
+        throw new Error("No authentication token found");
+      }
+
+      const response = await fetch(`${api.baseURL}/auth/change-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          current_password: passwordData.currentPassword,
+          new_password: passwordData.newPassword,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Failed to change password");
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Change password error:", error);
+      throw error;
+    }
+  },
+
+  /**
    * Update user profile (full name)
    * @param {Object} profileData - Profile data object
    * @returns {Promise} - Promise that resolves to updated user data
@@ -426,6 +478,87 @@ const authService = {
       return updatedUser;
     } catch (error) {
       console.error("Update profile error:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Send email verification link
+   * @param {string} email - User's email address
+   * @returns {Promise} - Promise that resolves to success message
+   */
+  sendVerificationEmail: async (email) => {
+    try {
+      const response = await fetch(`${api.baseURL}/auth/send-verification-email`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Failed to send verification email");
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Send verification email error:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Verify email with token
+   * @param {string} token - Email verification token
+   * @returns {Promise} - Promise that resolves to success message
+   */
+  verifyEmail: async (token) => {
+    try {
+      const response = await fetch(`${api.baseURL}/auth/verify-email`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ token }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Failed to verify email");
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Verify email error:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Resend email verification link
+   * @param {string} email - User's email address
+   * @returns {Promise} - Promise that resolves to success message
+   */
+  resendVerificationEmail: async (email) => {
+    try {
+      const response = await fetch(`${api.baseURL}/auth/resend-verification-email`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Failed to resend verification email");
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Resend verification email error:", error);
       throw error;
     }
   },

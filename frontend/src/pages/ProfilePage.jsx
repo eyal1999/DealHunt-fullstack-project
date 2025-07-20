@@ -3,6 +3,7 @@ import { useAuth } from "../contexts/AuthContext";
 import profileService from "../api/profileService";
 import { authService } from "../api/apiServices";
 import { initProfilePageAnimations } from "../utils/scrollReveal";
+import BackButton from "../components/common/BackButton";
 
 const ProfilePage = () => {
   const { currentUser } = useAuth();
@@ -200,11 +201,16 @@ const ProfilePage = () => {
     }
 
     setIsLoading(true);
+    setErrors({});
+    setSuccessMessage("");
 
-    // In a real app, you would call your update password API
-    // For now, we'll just simulate the API call
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      // Call the real API to change password
+      await authService.changePassword({
+        currentPassword: passwordData.currentPassword,
+        newPassword: passwordData.newPassword,
+      });
+
       setSuccessMessage("Password updated successfully");
 
       // Reset password fields
@@ -213,7 +219,14 @@ const ProfilePage = () => {
         newPassword: "",
         confirmPassword: "",
       });
-    }, 1000);
+    } catch (error) {
+      console.error("Password update error:", error);
+      setErrors({
+        submit: error.message || "Failed to update password",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Handle profile picture selection (preview only)
@@ -267,6 +280,11 @@ const ProfilePage = () => {
 
   return (
     <div className="max-w-4xl mx-auto">
+      {/* Back Button */}
+      <div className="mb-4">
+        <BackButton />
+      </div>
+      
       <h1 className="profile-header text-3xl font-bold mb-6">My Account</h1>
 
       {errors.general && (
@@ -530,6 +548,13 @@ const ProfilePage = () => {
                       </p>
                     )}
                   </div>
+
+                  {/* Submit error */}
+                  {errors.submit && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+                      {errors.submit}
+                    </div>
+                  )}
 
                   {/* Submit Button */}
                   <div className="flex justify-end">

@@ -1,7 +1,41 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 
 const PrivacyPolicyPage = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  // Check if user came from registration page
+  const fromRegistration = location.state?.fromRegistration;
+  const savedFormData = location.state?.formData;
+
+  // Handle back navigation
+  const handleBackNavigation = () => {
+    if (fromRegistration && savedFormData) {
+      // Go back to registration with preserved form data
+      navigate('/register', {
+        state: { formData: savedFormData }
+      });
+    } else {
+      // Default to home page
+      navigate('/');
+    }
+  };
+
+  // Handle navigation to terms with state preservation
+  const handleTermsNavigation = () => {
+    if (fromRegistration && savedFormData) {
+      navigate('/terms', {
+        state: { 
+          formData: savedFormData,
+          fromRegistration: true 
+        }
+      });
+    } else {
+      navigate('/terms');
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto">
       <h1 className="text-3xl font-bold mb-6">Privacy Policy</h1>
@@ -254,18 +288,30 @@ const PrivacyPolicyPage = () => {
         </div>
 
         <div className="mt-8 flex justify-center gap-4">
-          <Link
-            to="/terms"
-            className="bg-gray-500 text-white px-6 py-2 rounded hover:bg-gray-600 transition-colors"
-          >
-            Terms & Conditions
-          </Link>
-          <Link
-            to="/"
+          <button
+            onClick={handleBackNavigation}
             className="bg-primary text-white px-6 py-2 rounded hover:bg-blue-700 transition-colors"
           >
-            Back to Home
-          </Link>
+            {fromRegistration ? 'Back to Registration' : 'Back to Home'}
+          </button>
+          
+          {fromRegistration && (
+            <button
+              onClick={handleTermsNavigation}
+              className="bg-gray-500 text-white px-6 py-2 rounded hover:bg-gray-600 transition-colors"
+            >
+              View Terms & Conditions
+            </button>
+          )}
+          
+          {!fromRegistration && (
+            <Link
+              to="/terms"
+              className="bg-gray-500 text-white px-6 py-2 rounded hover:bg-gray-600 transition-colors"
+            >
+              Terms & Conditions
+            </Link>
+          )}
         </div>
       </div>
     </div>
