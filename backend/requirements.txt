@@ -10,10 +10,10 @@ pymongo==4.6.0
 # Authentication
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
-bcrypt==4.1.2
+bcrypt==4.3.0
 
 # HTTP requests
-requests==2.31.0
+requests==2.32.4
 httpx==0.25.2
 aiohttp==3.9.1
 
@@ -32,10 +32,10 @@ email-validator==2.1.0
 
 # Utilities
 python-dateutil==2.8.2
-pytz==2023.3
+pytz==2025.2
 
 # Web scraping for fallback description extraction
-beautifulsoup4==4.12.2
+beautifulsoup4==4.13.4
 
 # Image processing for profile pictures
 Pillow==10.1.0
