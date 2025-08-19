@@ -104,25 +104,82 @@ def clean_ebay_description(description: str) -> str:
         # Additional text cleaning
         lines = cleaned_text.split('\n')
         clean_lines = []
+        skip_section = False
         
         for line in lines:
             line = line.strip()
             if not line:
                 continue
                 
-            # Skip lines that are clearly promotional
             line_lower = line.lower()
-            skip_line = False
             
-            promotional_keywords = [
+            # Check for section headers that indicate boilerplate content
+            boilerplate_sections = [
+                'payment', 'delivery details', 'shipping', 'returns', 'return policy',
+                'about return', 'contact us', 'terms of sale', 'feedback', 
+                'store category', 'sign up now', 'you may also like',
+                'visit my store', 'see other items', 'terms and conditions',
+                'shipping and handling', 'estimated delivery', 'shipping cost',
+                'international shipping', 'payment method', 'payment options',
+                'buyer protection', 'money back guarantee', 'refund policy',
+                'customer service', 'business hours', 'we accept'
+            ]
+            
+            # Check if this line starts a boilerplate section
+            for section in boilerplate_sections:
+                if line_lower.startswith(section) or line_lower == section:
+                    skip_section = True
+                    break
+            
+            # Reset skip_section if we encounter a new main section that might be product-related
+            product_sections = [
+                'description', 'product description', 'features', 'specifications',
+                'product details', 'what\'s included', 'package includes',
+                'technical specifications', 'dimensions', 'materials', 'overview',
+                'attention:', 'note:', 'important:', 'warning:', 'notice:'
+            ]
+            
+            for section in product_sections:
+                if line_lower.startswith(section) or line_lower == section:
+                    skip_section = False
+                    break
+            
+            if skip_section:
+                continue
+                
+            # Skip lines that are clearly promotional or boilerplate
+            skip_keywords = [
                 'similar items', 'people also', 'you may like', 'recommended',
                 'visit my store', 'see other items', 'browse similar',
                 'check out my other', 'free shipping on orders',
-                'buy it now', 'best offer', 'add to watchlist'
+                'buy it now', 'best offer', 'add to watchlist',
+                'paypal', 'ebay registered', 'rma number', 'business day',
+                'satisfactory guarantee', 'ship to us only', 'apo/fpo',
+                'excludes:', 'seller are not responsible', 'reasonably priced',
+                'amazing customer service', 'do contact us', 'sku:',
+                'accept paypal', 'ship to ebay', 'wrong or undeliverable',
+                'item returned must be', 'replacement or full refund',
+                'normally emails will be', 'purchasing our products',
+                'backed by amazing', 'always reasonably priced'
             ]
             
-            for keyword in promotional_keywords:
+            skip_line = False
+            for keyword in skip_keywords:
                 if keyword in line_lower:
+                    skip_line = True
+                    break
+            
+            # Also skip lines that look like generic seller promises
+            generic_patterns = [
+                r'^100%\s+satisf', r'^high quality and reliable',
+                r'^we have.*guarantee', r'^all items will be',
+                r'^when purchasing our products', r'^backed by amazing',
+                r'^seller are not responsible', r'^accept\s+paypal',
+                r'^ship to.*only', r'^item returned must be'
+            ]
+            
+            for pattern in generic_patterns:
+                if re.search(pattern, line_lower):
                     skip_line = True
                     break
             
